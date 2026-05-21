@@ -12,3 +12,4 @@ Ve Vercelu nastavte:
 ## Heslo pro editaci
 
 `lubos`
+
