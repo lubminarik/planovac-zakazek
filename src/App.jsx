@@ -1246,67 +1246,59 @@ export default function App() {
           </Card>
         )}
 
-        <Card className="rounded-3xl shadow-sm">
-          <CardContent className="p-4">
-            <div className="mb-3 flex items-center gap-2 font-semibold"><BriefcaseBusiness size={18} /> Zakázky</div>
-
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {projects.map((project) => (
-                <div
-                  key={project.id}
-                  draggable={canEditAll}
-                  onDragStart={(event) => handleProjectDragStart(event, project.id)}
-                  onDragOver={(event) => canEditAll && event.preventDefault()}
-                  onDrop={(event) => handleProjectDrop(event, project.id)}
-                  className={`rounded-2xl border p-3 transition ${canEditAll ? "cursor-move" : ""} ${selectedProjectId === project.id ? "border-slate-900 bg-slate-100" : "bg-white hover:bg-slate-50"}`}
-                  title={canEditAll ? "Přetáhni pro změnu pořadí" : project.name}
-                >
-                  <button
-                    onClick={() => {
-                      setSelectedProjectId(project.id);
-                      setSelectedItemId(project.items[0]?.id);
-                    }}
-                    className="w-full text-left"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className={`h-3 w-3 rounded-full ${project.color || "bg-slate-400"}`} />
-                      <div className="font-medium">{project.name}</div>
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">{dateRangeLabel(project.startDate, project.endDate)}</div>
-                  </button>
-
-                  {canEditAll && (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        removeProject(project.id);
-                      }}
-                      className="mt-2 rounded-xl bg-red-100 px-3 py-1 text-xs text-red-700 hover:bg-red-200"
-                    >
-                      Smazat zakázku
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 flex gap-2">
-              <input
-                disabled={!canEdit}
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addProject()}
-                placeholder="Nová zakázka"
-                className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm"
-              />
-              <Button disabled={!canEdit} onClick={addProject} className="rounded-xl">
-                <Plus size={16} />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
         {selectedProject && (
+          <Card className="rounded-3xl shadow-sm">
+            <CardContent className="p-4">
+              <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-xl font-bold">
+                    <div className={`h-4 w-4 rounded-full ${selectedProject.color || "bg-slate-400"}`} />
+                    {selectedProject.name}
+                  </div>
+                  <div className="mt-1 text-sm text-slate-500">{dateRangeLabel(selectedProject.startDate, selectedProject.endDate)}</div>
+                </div>
+
+                {canEditAll && (
+                  <button onClick={() => removeProject(selectedProject.id)} className="rounded-xl bg-red-100 px-3 py-2 text-sm text-red-700 hover:bg-red-200">
+                    Smazat zakázku
+                  </button>
+                )}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="xl:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Název zakázky</label>
+                  <input disabled={!canEdit} value={selectedProject.name} onChange={(e) => updateProject(selectedProject.id, { name: e.target.value })} className="w-full rounded-xl border px-3 py-2" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Datum od</label>
+                  <input disabled={!canEdit} type="date" value={selectedProject.startDate || todayString()} onChange={(e) => updateProject(selectedProject.id, { startDate: e.target.value })} className="w-full rounded-xl border px-3 py-2" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Datum do</label>
+                  <input disabled={!canEdit} type="date" value={selectedProject.endDate || todayString()} onChange={(e) => updateProject(selectedProject.id, { endDate: e.target.value })} className="w-full rounded-xl border px-3 py-2" />
+                </div>
+                {canEdit && [["Částka dle SoD", "contractAmount"],["Částka za materiál", "materialAmount"],["Částka za práci", "workAmount"],["Dílčí fakturace", "invoicedAmount"]].map(([label, key]) => (
+                  <div key={key}>
+                    <label className="mb-1 block text-xs font-medium text-slate-500">{label}</label>
+                    <input value={selectedProject[key] || ""} onChange={(e) => updateProject(selectedProject.id, { [key]: e.target.value })} placeholder="0 Kč" className="w-full rounded-xl border px-3 py-2" />
+                  </div>
+                ))}
+              </div>
+
+              <textarea disabled={!canEdit} value={selectedProject.note || ""} onChange={(e) => updateProject(selectedProject.id, { note: e.target.value })} placeholder="Poznámka k zakázce" className="mt-3 w-full rounded-xl border px-3 py-2 text-sm" />
+
+              {canEditAll && (
+                <div className="mt-4 flex gap-2">
+                  <input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addProject()} placeholder="Nová zakázka" className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm" />
+                  <Button onClick={addProject} className="rounded-xl"><Plus size={16} /></Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {
           <Card className="rounded-3xl shadow-sm">
             <CardContent className="p-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
