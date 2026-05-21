@@ -176,6 +176,7 @@ export default function App() {
   const [employeesOpen, setEmployeesOpen] = useState(false);
   const [workloadOpen, setWorkloadOpen] = useState(false);
   const [attendanceOpen, setAttendanceOpen] = useState(false);
+  const [expandedItemIds, setExpandedItemIds] = useState({});
   const [lastBackupAt, setLastBackupAt] = useState("");
   const fileInputRef = useRef(null);
   const canEditAll = userRole === "admin";
@@ -439,6 +440,11 @@ export default function App() {
     event.preventDefault();
     const dragProjectId = event.dataTransfer.getData("text/plain");
     moveProject(dragProjectId, targetProjectId);
+  }
+
+  function toggleExpandedItem(itemId) {
+    setSelectedItemId(itemId);
+    setExpandedItemIds((prev) => ({ ...prev, [itemId]: !prev[itemId] }));
   }
 
   function updateItem(projectId, itemId, patch) {
@@ -1338,7 +1344,7 @@ export default function App() {
             <div className="mb-3 flex items-center gap-2 font-semibold"><Hammer size={18} /> Položky zakázky</div>
 
             <div className="overflow-x-auto rounded-2xl border bg-white">
-              <table className="w-full min-w-[1500px] text-left text-sm">
+              <table className="w-full min-w-[1050px] text-left text-sm">
                 <thead className="bg-slate-100 text-xs uppercase text-slate-500">
                   <tr>
                     <th className="p-2">Položka</th>
@@ -1346,115 +1352,155 @@ export default function App() {
                     <th className="p-2">Termín od–do</th>
                     <th className="p-2">Pracovník</th>
                     <th className="p-2">Stav</th>
-                    <th className="p-2">Úkoly</th>
-                    <th className="p-2">Materiál</th>
+                    <th className="p-2">Souhrn</th>
                     <th className="p-2">Akce</th>
                   </tr>
                 </thead>
                 <tbody>
                   {selectedProject?.items.map((item) => {
                     const statuses = [...new Set((item.materials || []).map((material) => material.status))];
+                    const doneTasks = (item.tasks || []).filter((task) => task.done).length;
+                    const isExpanded = !!expandedItemIds[item.id];
+
                     return (
-                      <tr key={item.id} className={`border-t align-top ${selectedItemId === item.id ? "bg-slate-50" : ""}`}>
-                        <td className="p-2">
-                          <input
-                            disabled={!canEditAll}
-                            value={item.name}
-                            onFocus={() => setSelectedItemId(item.id)}
-                            onChange={(e) => updateItem(selectedProject.id, item.id, { name: e.target.value })}
-                            className="w-full min-w-[170px] rounded-xl border px-2 py-1 text-sm font-medium"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <textarea
-                            disabled={!canEditAll}
-                            value={item.info || ""}
-                            onFocus={() => setSelectedItemId(item.id)}
-                            onChange={(e) => updateItem(selectedProject.id, item.id, { info: e.target.value })}
-                            placeholder="Poznámka, rozsah, specifikace…"
-                            className="h-20 w-full min-w-[220px] rounded-xl border px-2 py-1 text-xs"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <div className="grid min-w-[230px] gap-2">
-                            <input disabled={!canEditAll} type="date" value={item.startDate || todayString()} onChange={(e) => updateItem(selectedProject.id, item.id, { startDate: e.target.value })} className="rounded-xl border px-2 py-1 text-xs" />
-                            <input disabled={!canEditAll} type="date" value={item.endDate || todayString()} onChange={(e) => updateItem(selectedProject.id, item.id, { endDate: e.target.value })} className="rounded-xl border px-2 py-1 text-xs" />
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <select
-                            disabled={!canEditSite}
-                            value={item.employee}
-                            onChange={(e) => updateItem(selectedProject.id, item.id, { employee: e.target.value })}
-                            className="min-w-[140px] rounded-xl border px-2 py-1 text-xs"
-                          >
-                            {employees.map((employee) => <option key={employee}>{employee}</option>)}
-                          </select>
-                        </td>
-                        <td className="p-2">
-                          <div className="flex min-w-[160px] flex-wrap gap-1">
-                            {statuses.length === 0 && <span className="text-xs text-slate-400">Bez materiálu</span>}
-                            {statuses.map((status) => (
-                              <span key={status} className={`rounded-xl px-2 py-1 text-xs font-medium ${materialStatusClass(status)}`}>
-                                {status}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <div className="min-w-[300px] space-y-2">
-                            {(item.tasks || []).map((task) => (
-                              <div key={task.id} className="grid gap-2 rounded-xl border bg-white p-2 sm:grid-cols-[auto_1fr_120px] sm:items-center">
-                                <button disabled={!canEditSite} onClick={() => updateTaskInItem(item.id, task.id, { done: !task.done })}>
-                                  {task.done ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                      <React.Fragment key={item.id}>
+                        <tr className={`border-t align-top ${selectedItemId === item.id ? "bg-slate-50" : ""}`}>
+                          <td className="p-2">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandedItem(item.id)}
+                                className="rounded-lg bg-slate-100 px-2 py-1 text-xs hover:bg-slate-200"
+                              >
+                                {isExpanded ? "−" : "+"}
+                              </button>
+                              <input
+                                disabled={!canEditAll}
+                                value={item.name}
+                                onFocus={() => setSelectedItemId(item.id)}
+                                onChange={(e) => updateItem(selectedProject.id, item.id, { name: e.target.value })}
+                                className="w-full min-w-[170px] rounded-xl border px-2 py-1 text-sm font-medium"
+                              />
+                            </div>
+                          </td>
+                          <td className="p-2">
+                            <textarea
+                              disabled={!canEditAll}
+                              value={item.info || ""}
+                              onFocus={() => setSelectedItemId(item.id)}
+                              onChange={(e) => updateItem(selectedProject.id, item.id, { info: e.target.value })}
+                              placeholder="Poznámka, rozsah, specifikace…"
+                              className="h-12 w-full min-w-[220px] rounded-xl border px-2 py-1 text-xs"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <div className="grid min-w-[210px] gap-2 sm:grid-cols-2">
+                              <input disabled={!canEditAll} type="date" value={item.startDate || todayString()} onChange={(e) => updateItem(selectedProject.id, item.id, { startDate: e.target.value })} className="rounded-xl border px-2 py-1 text-xs" />
+                              <input disabled={!canEditAll} type="date" value={item.endDate || todayString()} onChange={(e) => updateItem(selectedProject.id, item.id, { endDate: e.target.value })} className="rounded-xl border px-2 py-1 text-xs" />
+                            </div>
+                          </td>
+                          <td className="p-2">
+                            <select
+                              disabled={!canEditSite}
+                              value={item.employee}
+                              onChange={(e) => updateItem(selectedProject.id, item.id, { employee: e.target.value })}
+                              className="min-w-[140px] rounded-xl border px-2 py-1 text-xs"
+                            >
+                              {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                            </select>
+                          </td>
+                          <td className="p-2">
+                            <div className="flex min-w-[160px] flex-wrap gap-1">
+                              {statuses.length === 0 && <span className="text-xs text-slate-400">Bez materiálu</span>}
+                              {statuses.map((status) => (
+                                <span key={status} className={`rounded-xl px-2 py-1 text-xs font-medium ${materialStatusClass(status)}`}>
+                                  {status}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="p-2 text-xs text-slate-600">
+                            <div className="min-w-[150px]">
+                              Úkoly: {doneTasks}/{(item.tasks || []).length}<br />
+                              Materiál: {(item.materials || []).length} položek
+                            </div>
+                          </td>
+                          <td className="p-2">
+                            <div className="flex min-w-[160px] flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandedItem(item.id)}
+                                className="rounded-xl bg-slate-100 px-3 py-1 text-xs text-slate-700 hover:bg-slate-200"
+                              >
+                                {isExpanded ? "Skrýt detail" : "Rozbalit"}
+                              </button>
+                              {canEditAll && (
+                                <button onClick={() => removeItem(item.id)} className="rounded-xl bg-red-100 px-3 py-1 text-xs text-red-700 hover:bg-red-200">
+                                  Smazat
                                 </button>
-                                <input
-                                  disabled={!canEditSite}
-                                  value={task.text}
-                                  onChange={(e) => updateTaskInItem(item.id, task.id, { text: e.target.value })}
-                                  className={`rounded-lg border px-2 py-1 text-xs ${task.done ? "text-slate-400 line-through" : ""}`}
-                                />
-                                <select disabled={!canEditSite} value={task.employee || item.employee || ""} onChange={(e) => updateTaskInItem(item.id, task.id, { employee: e.target.value })} className="rounded-lg border px-2 py-1 text-xs">
-                                  {employees.map((employee) => <option key={employee}>{employee}</option>)}
-                                </select>
-                              </div>
-                            ))}
-                            <div className="flex gap-2">
-                              <input disabled={!canEditSite} value={selectedItemId === item.id ? newTaskText : ""} onFocus={() => setSelectedItemId(item.id)} onChange={(e) => setNewTaskText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTaskToItem(item.id)} placeholder="Nový úkol" className="min-w-0 flex-1 rounded-xl border px-2 py-1 text-xs" />
-                              <Button disabled={!canEditSite} onClick={() => addTaskToItem(item.id)} size="sm" className="rounded-xl"><Plus size={14} /></Button>
+                              )}
                             </div>
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <div className="min-w-[360px] space-y-2">
-                            {(item.materials || []).map((material) => (
-                              <div key={material.id} className="rounded-xl border bg-white p-2">
-                                <div className="grid gap-2 sm:grid-cols-[1fr_120px_120px]">
-                                  <input disabled={!canEditSite} value={material.text} onChange={(e) => updateMaterialInItem(item.id, material.id, { text: e.target.value })} className="rounded-lg border px-2 py-1 text-xs font-medium" />
-                                  <select disabled={!canEditSite} value={material.status} onChange={(e) => updateMaterialInItem(item.id, material.id, { status: e.target.value })} className={`rounded-lg border px-2 py-1 text-xs font-medium ${materialStatusClass(material.status)}`}>
-                                    {materialStatuses.map((status) => <option key={status}>{status}</option>)}
-                                  </select>
-                                  <select disabled={!canEditSite} value={material.employee} onChange={(e) => updateMaterialInItem(item.id, material.id, { employee: e.target.value })} className="rounded-lg border px-2 py-1 text-xs">
-                                    {employees.map((employee) => <option key={employee}>{employee}</option>)}
-                                  </select>
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
+                          <tr className="border-t bg-slate-50">
+                            <td colSpan={7} className="p-3">
+                              <div className="grid gap-4 xl:grid-cols-2">
+                                <div className="rounded-2xl border bg-white p-3">
+                                  <div className="mb-3 font-semibold">Úkoly k položce</div>
+                                  <div className="space-y-2">
+                                    {(item.tasks || []).map((task) => (
+                                      <div key={task.id} className="grid gap-2 rounded-xl border bg-white p-2 sm:grid-cols-[auto_1fr_140px] sm:items-center">
+                                        <button disabled={!canEditSite} onClick={() => updateTaskInItem(item.id, task.id, { done: !task.done })}>
+                                          {task.done ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                                        </button>
+                                        <input
+                                          disabled={!canEditSite}
+                                          value={task.text}
+                                          onChange={(e) => updateTaskInItem(item.id, task.id, { text: e.target.value })}
+                                          className={`rounded-lg border px-2 py-1 text-xs ${task.done ? "text-slate-400 line-through" : ""}`}
+                                        />
+                                        <select disabled={!canEditSite} value={task.employee || item.employee || ""} onChange={(e) => updateTaskInItem(item.id, task.id, { employee: e.target.value })} className="rounded-lg border px-2 py-1 text-xs">
+                                          {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                                        </select>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="mt-3 flex gap-2">
+                                    <input disabled={!canEditSite} value={selectedItemId === item.id ? newTaskText : ""} onFocus={() => setSelectedItemId(item.id)} onChange={(e) => setNewTaskText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTaskToItem(item.id)} placeholder="Nový úkol" className="min-w-0 flex-1 rounded-xl border px-2 py-1 text-xs" />
+                                    <Button disabled={!canEditSite} onClick={() => addTaskToItem(item.id)} size="sm" className="rounded-xl"><Plus size={14} /></Button>
+                                  </div>
                                 </div>
-                                <textarea disabled={!canEditSite} value={material.details || ""} onChange={(e) => updateMaterialInItem(item.id, material.id, { details: e.target.value })} placeholder="Množství, barva, rozměr, poznámka…" className="mt-2 w-full rounded-lg border px-2 py-1 text-xs" rows={2} />
+
+                                <div className="rounded-2xl border bg-white p-3">
+                                  <div className="mb-3 font-semibold">Materiál k položce</div>
+                                  <div className="space-y-2">
+                                    {(item.materials || []).map((material) => (
+                                      <div key={material.id} className="rounded-xl border bg-white p-2">
+                                        <div className="grid gap-2 sm:grid-cols-[1fr_130px_130px]">
+                                          <input disabled={!canEditSite} value={material.text} onChange={(e) => updateMaterialInItem(item.id, material.id, { text: e.target.value })} className="rounded-lg border px-2 py-1 text-xs font-medium" />
+                                          <select disabled={!canEditSite} value={material.status} onChange={(e) => updateMaterialInItem(item.id, material.id, { status: e.target.value })} className={`rounded-lg border px-2 py-1 text-xs font-medium ${materialStatusClass(material.status)}`}>
+                                            {materialStatuses.map((status) => <option key={status}>{status}</option>)}
+                                          </select>
+                                          <select disabled={!canEditSite} value={material.employee} onChange={(e) => updateMaterialInItem(item.id, material.id, { employee: e.target.value })} className="rounded-lg border px-2 py-1 text-xs">
+                                            {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                                          </select>
+                                        </div>
+                                        <textarea disabled={!canEditSite} value={material.details || ""} onChange={(e) => updateMaterialInItem(item.id, material.id, { details: e.target.value })} placeholder="Množství, barva, rozměr, poznámka…" className="mt-2 w-full rounded-lg border px-2 py-1 text-xs" rows={2} />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="mt-3 flex gap-2">
+                                    <input disabled={!canEditSite} value={selectedItemId === item.id ? newMaterialText : ""} onFocus={() => setSelectedItemId(item.id)} onChange={(e) => setNewMaterialText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addMaterialToItem(item.id)} placeholder="Nový materiál" className="min-w-0 flex-1 rounded-xl border px-2 py-1 text-xs" />
+                                    <Button disabled={!canEditSite} onClick={() => addMaterialToItem(item.id)} size="sm" className="rounded-xl"><Plus size={14} /></Button>
+                                  </div>
+                                </div>
                               </div>
-                            ))}
-                            <div className="flex gap-2">
-                              <input disabled={!canEditSite} value={selectedItemId === item.id ? newMaterialText : ""} onFocus={() => setSelectedItemId(item.id)} onChange={(e) => setNewMaterialText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addMaterialToItem(item.id)} placeholder="Nový materiál" className="min-w-0 flex-1 rounded-xl border px-2 py-1 text-xs" />
-                              <Button disabled={!canEditSite} onClick={() => addMaterialToItem(item.id)} size="sm" className="rounded-xl"><Plus size={14} /></Button>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          {canEditAll && (
-                            <button onClick={() => removeItem(item.id)} className="rounded-xl bg-red-100 px-3 py-1 text-xs text-red-700 hover:bg-red-200">
-                              Smazat
-                            </button>
-                          )}
-                        </td>
-                      </tr>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
