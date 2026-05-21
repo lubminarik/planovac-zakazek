@@ -702,7 +702,7 @@ export default function App() {
   }
 
   function startAttendance() {
-    if (!canEditSite || !attendanceEmployee || !attendanceProjectId) return;
+    if (!canEditSite || !attendanceEmployee) return;
     const alreadyOpen = attendanceRecords.some((record) => record.employee === attendanceEmployee && !record.departure);
     if (alreadyOpen) {
       alert("Tento zaměstnanec už má otevřený příchod bez odchodu.");
@@ -713,8 +713,8 @@ export default function App() {
       {
         id: nextId("ATT"),
         employee: attendanceEmployee,
-        projectId: attendanceProjectId,
-        projectName: projects.find((project) => project.id === attendanceProjectId)?.name || "",
+        projectId: "",
+        projectName: "",
         arrival: new Date().toISOString(),
         departure: "",
         lunchMinutes: 30,
@@ -731,9 +731,26 @@ export default function App() {
       return;
     }
 
+    const selectedProject = projects.find((project) => project.id === attendanceProjectId);
+
+    if (!canEditSite || !attendanceEmployee) return;
+    const openRecord = attendanceRecords.find((record) => record.employee === attendanceEmployee && !record.departure);
+    if (!openRecord) {
+      alert("Tento zaměstnanec nemá otevřený příchod.");
+      return;
+    }
+
     setAttendanceRecords((prev) =>
       prev.map((record) =>
-        record.id === openRecord.id ? { ...record, departure: new Date().toISOString(), lunchMinutes: 30 } : record
+        record.id === openRecord.id
+          ? {
+              ...record,
+              projectId: attendanceProjectId,
+              projectName: selectedProject?.name || "",
+              departure: new Date().toISOString(),
+              lunchMinutes: 30,
+            }
+          : record
       )
     );
   }
@@ -1234,6 +1251,7 @@ export default function App() {
                   </div>
                 </div>
 
+                {canEditAll && (
                 <div className="rounded-3xl border bg-white p-4 shadow-sm">
                   <div className="text-xs uppercase tracking-wide text-slate-500">Finance zakázky</div>
                   <div className="mt-2 text-2xl font-bold">{money(Number(selectedProject.contractAmount || 0))}</div>
@@ -1243,6 +1261,7 @@ export default function App() {
                     <div className="flex justify-between font-semibold"><span>Fakturace</span><span>{money(Number(selectedProject.invoicedAmount || 0))}</span></div>
                   </div>
                 </div>
+              )}
 
                 <div className="rounded-3xl border bg-white p-4 shadow-sm">
                   <div className="text-xs uppercase tracking-wide text-slate-500">Materiál</div>
