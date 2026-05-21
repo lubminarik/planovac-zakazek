@@ -163,6 +163,12 @@ export default function App() {
   const [attendanceEmployee, setAttendanceEmployee] = useState(savedData?.attendanceEmployee || initialEmployees[0]);
   const [attendanceProjectId, setAttendanceProjectId] = useState(savedData?.attendanceProjectId || initialProjects[0].id);
   const [attendanceMonth, setAttendanceMonth] = useState(savedData?.attendanceMonth || todayString().slice(0, 7));
+  const [newManualAttendance, setNewManualAttendance] = useState({ employee: initialEmployees[0], projectId: initialProjects[0].id, date: todayString(), arrival: "07:00", departure: "15:30", lunchMinutes: 30 });
+  const [siteDiaryEntries, setSiteDiaryEntries] = useState(savedData?.siteDiaryEntries || []);
+  const [diaryNote, setDiaryNote] = useState("");
+  const [diaryPhoto, setDiaryPhoto] = useState("");
+  const [diarySignature, setDiarySignature] = useState("");
+  const [isSigning, setIsSigning] = useState(false);
   const [password, setPassword] = useState("");
   const [employeesOpen, setEmployeesOpen] = useState(false);
   const [workloadOpen, setWorkloadOpen] = useState(false);
@@ -177,9 +183,9 @@ export default function App() {
   const hasOpenAttendance = attendanceRecords.some((record) => record.employee === attendanceEmployee && !record.departure);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth }));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth, siteDiaryEntries }));
     setSaveStatus("Uloženo");
-  }, [employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth]);
+  }, [employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth, siteDiaryEntries]);
 
   const workload = useMemo(() => {
     const map = {};
@@ -465,7 +471,7 @@ export default function App() {
     if (!record.arrival || !record.departure) return "—";
     const start = new Date(record.arrival);
     const end = new Date(record.departure);
-    const minutes = Math.max(0, Math.round((end - start) / 60000) - 30);
+    const minutes = Math.max(0, Math.round((end - start) / 60000) - (record.lunchMinutes || 30));
     const hours = Math.floor(minutes / 60);
     const rest = minutes % 60;
     return `${hours} h ${rest} min`;
@@ -575,6 +581,100 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function updateAttendanceRecord(recordId, patch) {
+    if (!canEditAll) return;
+    setAttendanceRecords((prev) => prev.map((record) => (record.id === recordId ? { ...record, ...patch } : record)));
+  }
+
+  function removeAttendanceRecord(recordId) {
+    if (!canEditAll) return;
+    if (!window.confirm("Opravdu smazat tento záznam docházky?")) return;
+    setAttendanceRecords((prev) => prev.filter((record) => record.id !== recordId));
+  }
+
+  function addManualAttendance() {
+    if (!canEditAll) return;
+    const project = projects.find((item) => item.id === newManualAttendance.projectId);
+    setAttendanceRecords((prev) => [
+      {
+        id: nextId("ATT"),
+        employee: newManualAttendance.employee,
+        projectId: newManualAttendance.projectId,
+        projectName: project?.name || "",
+        arrival: `${newManualAttendance.date}T${newManualAttendance.arrival}:00`,
+        departure: `${newManualAttendance.date}T${newManualAttendance.departure}:00`,
+        lunchMinutes: Number(newManualAttendance.lunchMinutes) || 30,
+        manual: true,
+      },
+      ...prev,
+    ]);
+  }
+
+  function dateTimeToLocalInput(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+  }
+
+  function localInputToIso(value) {
+    if (!value) return "";
+    return new Date(value).toISOString();
+  }
+
+  function handleDiaryPhoto(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setDiaryPhoto(String(reader.result));
+    reader.readAsDataURL(file);
+  }
+
+  function startDictation() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Diktování tento prohlížeč nepodporuje. Na mobilu často funguje diktování přímo na klávesnici.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "cs-CZ";
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const text = event.results?.[0]?.[0]?.transcript || "";
+      setDiaryNote((prev) => `${prev}${prev ? " " : ""}${text}`);
+    };
+    recognition.start();
+  }
+
+  function saveDiaryEntry() {
+    if (!canEditSite || !selectedProject) return;
+    if (!diaryNote.trim() && !diaryPhoto && !diarySignature) {
+      alert("Doplň poznámku, fotku nebo podpis.");
+      return;
+    }
+
+    setSiteDiaryEntries((prev) => [
+      {
+        id: nextId("DEN"),
+        projectId: selectedProject.id,
+        projectName: selectedProject.name,
+        createdAt: new Date().toISOString(),
+        note: diaryNote.trim(),
+        photo: diaryPhoto,
+        signature: diarySignature,
+      },
+      ...prev,
+    ]);
+    setDiaryNote("");
+    setDiaryPhoto("");
+    setDiarySignature("");
+  }
+
+  function clearSignature() {
+    setDiarySignature("");
+    setIsSigning(false);
+  }
+
   function exportData() {
     const data = {
       version: 1,
@@ -589,6 +689,7 @@ export default function App() {
       attendanceEmployee,
       attendanceProjectId,
       attendanceMonth,
+      siteDiaryEntries,
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -630,6 +731,7 @@ export default function App() {
         setAttendanceEmployee(imported.attendanceEmployee || imported.employees?.[0] || "");
         setAttendanceProjectId(imported.attendanceProjectId || imported.projects?.[0]?.id || "");
         setAttendanceMonth(imported.attendanceMonth || todayString().slice(0, 7));
+        setSiteDiaryEntries(imported.siteDiaryEntries || []);
         alert("Data byla úspěšně importována.");
       } catch (error) {
         alert("Import se nepovedl. Zkontrolujte, že nahráváte správný JSON soubor.");
@@ -863,8 +965,25 @@ export default function App() {
                     </div>
                   </div>
 
+                  <div className="mt-4 rounded-2xl border bg-white p-4">
+                    <div className="mb-3 font-semibold">Ruční doplnění docházky</div>
+                    <div className="grid gap-2 md:grid-cols-[1fr_1fr_130px_110px_110px_100px_auto]">
+                      <select value={newManualAttendance.employee} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, employee: e.target.value }))} className="rounded-xl border px-3 py-2 text-sm">
+                        {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                      </select>
+                      <select value={newManualAttendance.projectId} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, projectId: e.target.value }))} className="rounded-xl border px-3 py-2 text-sm">
+                        {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                      </select>
+                      <input type="date" value={newManualAttendance.date} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, date: e.target.value }))} className="rounded-xl border px-3 py-2 text-sm" />
+                      <input type="time" value={newManualAttendance.arrival} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, arrival: e.target.value }))} className="rounded-xl border px-3 py-2 text-sm" />
+                      <input type="time" value={newManualAttendance.departure} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, departure: e.target.value }))} className="rounded-xl border px-3 py-2 text-sm" />
+                      <input type="number" value={newManualAttendance.lunchMinutes} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, lunchMinutes: Number(e.target.value) || 0 }))} className="rounded-xl border px-3 py-2 text-sm" />
+                      <Button onClick={addManualAttendance}>Doplnit</Button>
+                    </div>
+                  </div>
+
                   <div className="mt-4 overflow-x-auto rounded-2xl border bg-white">
-                    <table className="w-full min-w-[720px] text-left text-sm">
+                    <table className="w-full min-w-[980px] text-left text-sm">
                       <thead className="bg-slate-100 text-xs uppercase text-slate-500">
                         <tr>
                           <th className="p-2">Zaměstnanec</th>
@@ -877,13 +996,27 @@ export default function App() {
                       </thead>
                       <tbody>
                         {attendanceReport.records.slice(0, 80).map((record) => (
-                          <tr key={record.id} className="border-t">
-                            <td className="p-2 font-medium">{record.employee}</td>
-                            <td className="p-2">{record.projectName}</td>
-                            <td className="p-2">{formatDateTime(record.arrival)}</td>
-                            <td className="p-2">{formatDateTime(record.departure)}</td>
-                            <td className="p-2">{record.lunchMinutes || 30} min</td>
-                            <td className="p-2 font-medium">{attendanceHours(record)}</td>
+                          <tr key={record.id} className="border-t align-top">
+                            <td className="p-2">
+                              <select value={record.employee} onChange={(e) => updateAttendanceRecord(record.id, { employee: e.target.value })} className="w-full rounded-lg border px-2 py-1 text-xs">
+                                {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                              </select>
+                            </td>
+                            <td className="p-2">
+                              <select value={record.projectId} onChange={(e) => {
+                                const project = projects.find((item) => item.id === e.target.value);
+                                updateAttendanceRecord(record.id, { projectId: e.target.value, projectName: project?.name || "" });
+                              }} className="w-full rounded-lg border px-2 py-1 text-xs">
+                                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                              </select>
+                            </td>
+                            <td className="p-2"><input type="datetime-local" value={dateTimeToLocalInput(record.arrival)} onChange={(e) => updateAttendanceRecord(record.id, { arrival: localInputToIso(e.target.value) })} className="rounded-lg border px-2 py-1 text-xs" /></td>
+                            <td className="p-2"><input type="datetime-local" value={dateTimeToLocalInput(record.departure)} onChange={(e) => updateAttendanceRecord(record.id, { departure: localInputToIso(e.target.value) })} className="rounded-lg border px-2 py-1 text-xs" /></td>
+                            <td className="p-2"><input type="number" value={record.lunchMinutes || 30} onChange={(e) => updateAttendanceRecord(record.id, { lunchMinutes: Number(e.target.value) || 0 })} className="w-20 rounded-lg border px-2 py-1 text-xs" /></td>
+                            <td className="p-2 font-medium">
+                              {attendanceHours(record)}
+                              <button onClick={() => removeAttendanceRecord(record.id)} className="ml-2 rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700">Smazat</button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1087,6 +1220,73 @@ export default function App() {
                     <Button disabled={!canEditSite} onClick={addMaterial} className="rounded-xl"><Plus size={16} /></Button>
                   </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {selectedProject && canEditSite && (
+          <Card className="rounded-3xl shadow-sm">
+            <CardContent className="p-4">
+              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="font-semibold">Stavební deník – {selectedProject.name}</div>
+                  <div className="text-xs text-slate-500">Poznámka, fotka a podpis přímo ze stavby</div>
+                </div>
+                <Button onClick={saveDiaryEntry}>Uložit záznam</Button>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-[1fr_260px_260px]">
+                <div>
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={startDictation}>Diktovat</Button>
+                    <span className="self-center text-xs text-slate-500">Diktování funguje podle podpory prohlížeče / mobilu.</span>
+                  </div>
+                  <textarea value={diaryNote} onChange={(e) => setDiaryNote(e.target.value)} placeholder="Co se dnes dělalo, poznámky, problémy, pokyny…" className="h-40 w-full rounded-2xl border px-3 py-2 text-sm" />
+                </div>
+
+                <div className="rounded-2xl border bg-slate-50 p-3">
+                  <div className="mb-2 text-sm font-semibold">Fotka</div>
+                  <input type="file" accept="image/*" capture="environment" onChange={(e) => handleDiaryPhoto(e.target.files?.[0])} className="text-xs" />
+                  {diaryPhoto && <img src={diaryPhoto} alt="Fotka deníku" className="mt-3 max-h-40 rounded-xl object-cover" />}
+                </div>
+
+                <div className="rounded-2xl border bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-sm font-semibold">Podpis prstem</div>
+                    <button onClick={clearSignature} className="text-xs text-red-600">Smazat</button>
+                  </div>
+                  <div
+                    onPointerDown={(e) => {
+                      setIsSigning(true);
+                      setDiarySignature((prev) => `${prev}${prev ? " " : ""}M${Math.round(e.nativeEvent.offsetX)},${Math.round(e.nativeEvent.offsetY)}`);
+                    }}
+                    onPointerMove={(e) => {
+                      if (!isSigning) return;
+                      setDiarySignature((prev) => `${prev} L${Math.round(e.nativeEvent.offsetX)},${Math.round(e.nativeEvent.offsetY)}`);
+                    }}
+                    onPointerUp={() => setIsSigning(false)}
+                    onPointerLeave={() => setIsSigning(false)}
+                    className="h-40 touch-none rounded-xl border bg-white"
+                  >
+                    <svg className="h-full w-full">
+                      <path d={diarySignature} fill="none" stroke="black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {siteDiaryEntries.filter((entry) => entry.projectId === selectedProject.id).slice(0, 10).map((entry) => (
+                  <div key={entry.id} className="rounded-2xl border bg-white p-3">
+                    <div className="text-xs text-slate-500">{formatDateTime(entry.createdAt)}</div>
+                    {entry.note && <div className="mt-2 text-sm">{entry.note}</div>}
+                    <div className="mt-2 flex flex-wrap gap-3">
+                      {entry.photo && <img src={entry.photo} alt="Fotka deníku" className="max-h-32 rounded-xl" />}
+                      {entry.signature && <svg className="h-24 w-48 rounded-xl border bg-white"><path d={entry.signature} fill="none" stroke="black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                    </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
