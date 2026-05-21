@@ -5,12 +5,22 @@ import { Button } from "@/components/ui/button";
 import { supabase, PLANNER_STATE_ID } from "@/lib/supabase";
 
 const weeks = Array.from({ length: 53 }, (_, i) => i + 1);
-const initialEmployees = ["Luboš", "Honza", "Petr", "Karel"];
+const initialEmployees = ["Luboš Minařík", "Libor Koudelný", "Mirek Rédl", "Dominik Kuřina", "Martin Loubal", "Miloš Konrád", "Jaroslav Chodil", "Pavel Lušovský", "Ivan Henik", "Tomáš Baťa"];
 const projectColors = ["bg-red-500", "bg-blue-500", "bg-green-500", "bg-orange-500", "bg-purple-500", "bg-pink-500", "bg-cyan-500", "bg-yellow-500"];
 const materialStatuses = ["Objednat", "Objednáno", "Ve výrobě", "Na cestě", "Skladem", "Nainstalováno"];
 const STORAGE_KEY = "planovac-zakazek-data-v1";
-const ADMIN_PASSWORD = "lubos";
-const SITE_PASSWORD = "stavba";
+const USER_PASSWORDS = {
+  MinarikL: { role: "admin", employee: "Luboš Minařík" },
+  KoudelnyL: { role: "site", employee: "Libor Koudelný" },
+  RedlM: { role: "site", employee: "Mirek Rédl" },
+  KurinaD: { role: "site", employee: "Dominik Kuřina" },
+  LoubalM: { role: "site", employee: "Martin Loubal" },
+  KonradM: { role: "site", employee: "Miloš Konrád" },
+  ChodilJ: { role: "site", employee: "Jaroslav Chodil" },
+  LusovskyP: { role: "site", employee: "Pavel Lušovský" },
+  HenikI: { role: "site", employee: "Ivan Henik" },
+  BataT: { role: "site", employee: "Tomáš Baťa" },
+};
 
 const initialProjects = [
   {
@@ -665,15 +675,20 @@ export default function App() {
   }
 
   function loginAdmin() {
-    if (password === ADMIN_PASSWORD) {
-      setUserRole("admin");
-      setPassword("");
-    } else if (password === SITE_PASSWORD) {
-      setUserRole("site");
-      setPassword("");
-    } else {
+    const user = USER_PASSWORDS[password];
+
+    if (!user) {
       alert("Špatné heslo.");
+      return;
     }
+
+    setUserRole(user.role);
+
+    if (user.employee) {
+      setAttendanceEmployee(user.employee);
+    }
+
+    setPassword("");
   }
 
   function attendanceHours(record) {
@@ -1020,15 +1035,25 @@ export default function App() {
                         onDragStart={(event) => handleProjectDragStart(event, project.id)}
                         onDragOver={(event) => canEditAll && event.preventDefault()}
                         onDrop={(event) => handleProjectDrop(event, project.id)}
-                        className={`truncate rounded-xl px-2 py-1 font-medium ${canEditAll ? "cursor-move bg-slate-100 hover:bg-slate-200" : "bg-slate-50"}`}
-                        title={canEditAll ? "Přetáhni zakázku pro změnu pořadí" : project.name}
+                        onClick={() => {
+                          setSelectedProjectId(project.id);
+                          setSelectedItemId(project.items?.[0]?.id);
+                        }}
+                        className={`truncate rounded-xl px-2 py-1 font-medium ${canEditAll ? "cursor-move bg-slate-100 hover:bg-slate-200" : "cursor-pointer bg-slate-50 hover:bg-slate-100"} ${selectedProjectId === project.id ? "ring-2 ring-slate-900" : ""}`}
+                        title={canEditAll ? "Klikni pro výběr, přetáhni pro změnu pořadí" : project.name}
                       >
                         {project.name}
                       </div>
                       {weeks.map((week) => (
-                        <div
+                        <button
+                          type="button"
                           key={week}
-                          className={`h-6 rounded border ${week === currentWeek ? "border-blue-700 border-2" : "border-transparent"} ${overlapsDateRange(project.startDate, project.endDate, week, viewYear) ? project.color || "bg-slate-800" : "bg-slate-100"}`}
+                          onClick={() => {
+                            setSelectedProjectId(project.id);
+                            setSelectedItemId(project.items?.[0]?.id);
+                          }}
+                          className={`h-6 rounded border ${week === currentWeek ? "border-blue-700 border-2" : "border-transparent"} ${overlapsDateRange(project.startDate, project.endDate, week, viewYear) ? project.color || "bg-slate-800" : "bg-slate-100"} ${selectedProjectId === project.id && overlapsDateRange(project.startDate, project.endDate, week, viewYear) ? "ring-2 ring-slate-900" : ""}`}
+                          title={`${project.name} – klikni pro detail`}
                         />
                       ))}
                     </React.Fragment>
@@ -1044,7 +1069,7 @@ export default function App() {
             <CardContent className="p-4">
               <div className="mb-3 flex items-center gap-2 font-semibold"><Users size={18} /> Docházka</div>
               <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
-                <select value={attendanceEmployee} onChange={(e) => setAttendanceEmployee(e.target.value)} className="rounded-xl border bg-white px-3 py-2 text-sm">
+                <select value={attendanceEmployee} onChange={(e) => setAttendanceEmployee(e.target.value)} disabled={userRole === "site"} className="rounded-xl border bg-white px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500">
                   {employees.map((employee) => <option key={employee}>{employee}</option>)}
                 </select>
                 <select value={attendanceProjectId} onChange={(e) => setAttendanceProjectId(e.target.value)} className="rounded-xl border bg-white px-3 py-2 text-sm">
@@ -1503,9 +1528,9 @@ export default function App() {
               {attendanceOpen && (
                 <div className="mt-4">
                   <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
-                    <select value={attendanceEmployee} onChange={(e) => setAttendanceEmployee(e.target.value)} className="rounded-xl border bg-white px-3 py-2 text-sm">
-                      {employees.map((employee) => <option key={employee}>{employee}</option>)}
-                    </select>
+                    <select value={attendanceEmployee} onChange={(e) => setAttendanceEmployee(e.target.value)} disabled={userRole === "site"} className="rounded-xl border bg-white px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500">
+                  {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                </select>
                     <select value={attendanceProjectId} onChange={(e) => setAttendanceProjectId(e.target.value)} className="rounded-xl border bg-white px-3 py-2 text-sm">
                       {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
                     </select>
