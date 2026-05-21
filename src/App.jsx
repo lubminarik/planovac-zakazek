@@ -501,6 +501,24 @@ export default function App() {
     setNewMaterialText("");
   }
 
+  function removeProject(projectId) {
+    if (!canEditAll) return;
+    if (projects.length <= 1) {
+      alert("Musí zůstat alespoň jedna zakázka.");
+      return;
+    }
+    const project = projects.find((item) => item.id === projectId);
+    if (!window.confirm(`Opravdu smazat zakázku ${project?.name || ""}?`)) return;
+
+    const remainingProjects = projects.filter((item) => item.id !== projectId);
+    setProjects(remainingProjects);
+
+    if (selectedProjectId === projectId) {
+      setSelectedProjectId(remainingProjects[0]?.id);
+      setSelectedItemId(remainingProjects[0]?.items?.[0]?.id);
+    }
+  }
+
   function removeItem(itemId) {
     if (!canEditAll || !selectedProject) return;
     if (selectedProject.items.length <= 1) {
@@ -1197,25 +1215,41 @@ export default function App() {
 
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {projects.map((project) => (
-                <button
+                <div
                   key={project.id}
                   draggable={canEditAll}
                   onDragStart={(event) => handleProjectDragStart(event, project.id)}
                   onDragOver={(event) => canEditAll && event.preventDefault()}
                   onDrop={(event) => handleProjectDrop(event, project.id)}
-                  onClick={() => {
-                    setSelectedProjectId(project.id);
-                    setSelectedItemId(project.items[0]?.id);
-                  }}
-                  className={`rounded-2xl border p-3 text-left transition ${canEditAll ? "cursor-move" : ""} ${selectedProjectId === project.id ? "border-slate-900 bg-slate-100" : "bg-white hover:bg-slate-50"}`}
+                  className={`rounded-2xl border p-3 transition ${canEditAll ? "cursor-move" : ""} ${selectedProjectId === project.id ? "border-slate-900 bg-slate-100" : "bg-white hover:bg-slate-50"}`}
                   title={canEditAll ? "Přetáhni pro změnu pořadí" : project.name}
                 >
-                  <div className="flex items-center gap-2">
-                    <div className={`h-3 w-3 rounded-full ${project.color || "bg-slate-400"}`} />
-                    <div className="font-medium">{project.name}</div>
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">{dateRangeLabel(project.startDate, project.endDate)}</div>
-                </button>
+                  <button
+                    onClick={() => {
+                      setSelectedProjectId(project.id);
+                      setSelectedItemId(project.items[0]?.id);
+                    }}
+                    className="w-full text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`h-3 w-3 rounded-full ${project.color || "bg-slate-400"}`} />
+                      <div className="font-medium">{project.name}</div>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">{dateRangeLabel(project.startDate, project.endDate)}</div>
+                  </button>
+
+                  {canEditAll && (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeProject(project.id);
+                      }}
+                      className="mt-2 rounded-xl bg-red-100 px-3 py-1 text-xs text-red-700 hover:bg-red-200"
+                    >
+                      Smazat zakázku
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
 
