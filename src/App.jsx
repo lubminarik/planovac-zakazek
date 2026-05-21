@@ -9,6 +9,7 @@ const projectColors = ["bg-red-500", "bg-blue-500", "bg-green-500", "bg-orange-5
 const materialStatuses = ["Objednat", "Objednáno", "Ve výrobě", "Na cestě", "Skladem", "Nainstalováno"];
 const STORAGE_KEY = "planovac-zakazek-data-v1";
 const ADMIN_PASSWORD = "lubos";
+const SITE_PASSWORD = "stavba";
 
 const initialProjects = [
   {
@@ -157,21 +158,26 @@ export default function App() {
   const [newMaterialText, setNewMaterialText] = useState("");
   const [viewYear, setViewYear] = useState(savedData?.viewYear || 2026);
   const [saveStatus, setSaveStatus] = useState("Načteno");
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState("viewer");
+  const [attendanceRecords, setAttendanceRecords] = useState(savedData?.attendanceRecords || []);
+  const [attendanceEmployee, setAttendanceEmployee] = useState(savedData?.attendanceEmployee || initialEmployees[0]);
+  const [attendanceProjectId, setAttendanceProjectId] = useState(savedData?.attendanceProjectId || initialProjects[0].id);
   const [password, setPassword] = useState("");
   const [employeesOpen, setEmployeesOpen] = useState(false);
   const [workloadOpen, setWorkloadOpen] = useState(false);
   const fileInputRef = useRef(null);
-  const canEdit = isAdmin;
+  const canEditAll = userRole === "admin";
+  const canEditSite = userRole === "admin" || userRole === "site";
+  const canEdit = canEditAll;
   const currentWeek = weekFromDate(todayString(), viewYear);
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) || projects[0];
   const selectedItem = selectedProject?.items.find((item) => item.id === selectedItemId) || selectedProject?.items[0];
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear }));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId }));
     setSaveStatus("Uloženo");
-  }, [employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear]);
+  }, [employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId]);
 
   const workload = useMemo(() => {
     const map = {};
@@ -268,12 +274,12 @@ export default function App() {
   }
 
   function updateProject(projectId, patch) {
-    if (!canEdit) return;
+    if (!canEditAll) return;
     setProjects((prev) => prev.map((project) => (project.id === projectId ? { ...project, ...patch } : project)));
   }
 
   function updateItem(projectId, itemId, patch) {
-    if (!canEdit) return;
+    if (!canEditAll) return;
     setProjects((prev) =>
       prev.map((project) =>
         project.id !== projectId
@@ -284,7 +290,7 @@ export default function App() {
   }
 
   function addProject() {
-    if (!canEdit || !newProjectName.trim()) return;
+    if (!canEditAll || !newProjectName.trim()) return;
     const id = nextId("ZK");
     const itemId = nextId("P");
     const project = {
@@ -307,7 +313,7 @@ export default function App() {
   }
 
   function addItem() {
-    if (!canEdit || !selectedProject || !newItemName.trim()) return;
+    if (!canEditAll || !selectedProject || !newItemName.trim()) return;
     const item = { id: nextId("P"), name: newItemName.trim(), startDate: selectedProject.startDate || todayString(), endDate: selectedProject.endDate || todayString(), employee: employees[0] || "", tasks: [], materials: [] };
     setProjects((prev) => prev.map((project) => (project.id === selectedProject.id ? { ...project, items: [...project.items, item] } : project)));
     setSelectedItemId(item.id);
@@ -315,19 +321,19 @@ export default function App() {
   }
 
   function addTask() {
-    if (!canEdit || !selectedProject || !selectedItem || !newTaskText.trim()) return;
+    if (!canEditSite || !selectedProject || !selectedItem || !newTaskText.trim()) return;
     updateItem(selectedProject.id, selectedItem.id, { tasks: [...selectedItem.tasks, { id: nextId("T"), text: newTaskText.trim(), done: false, employee: selectedItem.employee }] });
     setNewTaskText("");
   }
 
   function addMaterial() {
-    if (!canEdit || !selectedProject || !selectedItem || !newMaterialText.trim()) return;
+    if (!canEditSite || !selectedProject || !selectedItem || !newMaterialText.trim()) return;
     updateItem(selectedProject.id, selectedItem.id, { materials: [...selectedItem.materials, { id: nextId("M"), text: newMaterialText.trim(), details: "", status: "Objednat", employee: selectedItem.employee }] });
     setNewMaterialText("");
   }
 
   function addEmployee() {
-    if (!canEdit || !employeeName.trim()) return;
+    if (!canEditAll || !employeeName.trim()) return;
     const name = employeeName.trim();
     setEmployees((prev) => [...prev, name]);
     setEmployeeAbsences((prev) => ({ ...prev, [name]: prev[name] || [] }));
@@ -335,7 +341,7 @@ export default function App() {
   }
 
   function renameEmployeeAtIndex(index, newName) {
-    if (!canEdit) return;
+    if (!canEditAll) return;
     const oldName = employees[index];
     setEmployees((prev) => prev.map((employee, i) => (i === index ? newName : employee)));
     setEmployeeAbsences((prev) => {
@@ -360,7 +366,7 @@ export default function App() {
   }
 
   function removeEmployee(employee) {
-    if (!canEdit) return;
+    if (!canEditAll) return;
     const used = projects.some((project) => project.items.some((item) => item.employee === employee || item.tasks.some((task) => task.employee === employee) || item.materials.some((material) => material.employee === employee)));
     if (used) return alert("Tento zaměstnanec je někde přiřazený.");
     setEmployees((prev) => prev.filter((item) => item !== employee));
@@ -372,13 +378,13 @@ export default function App() {
   }
 
   function addAbsence(employee) {
-    if (!canEdit) return;
+    if (!canEditAll) return;
     const absence = { id: nextId("ABS"), title: "Dovolená", startDate: todayString(), endDate: todayString() };
     setEmployeeAbsences((prev) => ({ ...prev, [employee]: [...(prev[employee] || []), absence] }));
   }
 
   function updateAbsence(employee, absenceId, patch) {
-    if (!canEdit) return;
+    if (!canEditAll) return;
     setEmployeeAbsences((prev) => ({
       ...prev,
       [employee]: (prev[employee] || []).map((absence) => (absence.id === absenceId ? { ...absence, ...patch } : absence)),
@@ -386,7 +392,7 @@ export default function App() {
   }
 
   function removeAbsence(employee, absenceId) {
-    if (!canEdit) return;
+    if (!canEditAll) return;
     setEmployeeAbsences((prev) => ({
       ...prev,
       [employee]: (prev[employee] || []).filter((absence) => absence.id !== absenceId),
@@ -394,17 +400,17 @@ export default function App() {
   }
 
   function toggleTask(taskId) {
-    if (!canEdit || !selectedProject || !selectedItem) return;
+    if (!canEditSite || !selectedProject || !selectedItem) return;
     updateItem(selectedProject.id, selectedItem.id, { tasks: selectedItem.tasks.map((task) => (task.id === taskId ? { ...task, done: !task.done } : task)) });
   }
 
   function updateMaterial(materialId, patch) {
-    if (!canEdit || !selectedProject || !selectedItem) return;
+    if (!canEditSite || !selectedProject || !selectedItem) return;
     updateItem(selectedProject.id, selectedItem.id, { materials: selectedItem.materials.map((material) => (material.id === materialId ? { ...material, ...patch } : material)) });
   }
 
   function resetLocalData() {
-    if (!canEdit) return;
+    if (!canEditAll) return;
     if (!window.confirm("Opravdu smazat uložená data v tomto prohlížeči?")) return;
     window.localStorage.removeItem(STORAGE_KEY);
     setEmployees(initialEmployees);
@@ -416,11 +422,66 @@ export default function App() {
 
   function loginAdmin() {
     if (password === ADMIN_PASSWORD) {
-      setIsAdmin(true);
+      setUserRole("admin");
+      setPassword("");
+    } else if (password === SITE_PASSWORD) {
+      setUserRole("site");
       setPassword("");
     } else {
       alert("Špatné heslo.");
     }
+  }
+
+  function attendanceHours(record) {
+    if (!record.arrival || !record.departure) return "—";
+    const start = new Date(record.arrival);
+    const end = new Date(record.departure);
+    const minutes = Math.max(0, Math.round((end - start) / 60000) - 30);
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return `${hours} h ${rest} min`;
+  }
+
+  function startAttendance() {
+    if (!canEditSite || !attendanceEmployee || !attendanceProjectId) return;
+    const alreadyOpen = attendanceRecords.some((record) => record.employee === attendanceEmployee && !record.departure);
+    if (alreadyOpen) {
+      alert("Tento zaměstnanec už má otevřený příchod bez odchodu.");
+      return;
+    }
+
+    setAttendanceRecords((prev) => [
+      {
+        id: nextId("ATT"),
+        employee: attendanceEmployee,
+        projectId: attendanceProjectId,
+        projectName: projects.find((project) => project.id === attendanceProjectId)?.name || "",
+        arrival: new Date().toISOString(),
+        departure: "",
+        lunchMinutes: 30,
+      },
+      ...prev,
+    ]);
+  }
+
+  function stopAttendance() {
+    if (!canEditSite || !attendanceEmployee) return;
+    const openRecord = attendanceRecords.find((record) => record.employee === attendanceEmployee && !record.departure);
+    if (!openRecord) {
+      alert("Tento zaměstnanec nemá otevřený příchod.");
+      return;
+    }
+
+    setAttendanceRecords((prev) =>
+      prev.map((record) =>
+        record.id === openRecord.id ? { ...record, departure: new Date().toISOString(), lunchMinutes: 30 } : record
+      )
+    );
+  }
+
+  function formatDateTime(value) {
+    if (!value) return "—";
+    return new Date(value).toLocaleString("cs-CZ", { dateStyle: "short", timeStyle: "short" });
   }
 
   function exportData() {
@@ -433,6 +494,9 @@ export default function App() {
       selectedProjectId,
       selectedItemId,
       viewYear,
+      attendanceRecords,
+      attendanceEmployee,
+      attendanceProjectId,
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -470,6 +534,9 @@ export default function App() {
         setSelectedProjectId(imported.selectedProjectId || imported.projects?.[0]?.id);
         setSelectedItemId(imported.selectedItemId || imported.projects?.[0]?.items?.[0]?.id);
         setViewYear(imported.viewYear || new Date().getFullYear());
+        setAttendanceRecords(imported.attendanceRecords || []);
+        setAttendanceEmployee(imported.attendanceEmployee || imported.employees?.[0] || "");
+        setAttendanceProjectId(imported.attendanceProjectId || imported.projects?.[0]?.id || "");
         alert("Data byla úspěšně importována.");
       } catch (error) {
         alert("Import se nepovedl. Zkontrolujte, že nahráváte správný JSON soubor.");
@@ -492,19 +559,25 @@ export default function App() {
             <div className="rounded-2xl bg-slate-100 px-4 py-2"><b>{projects.length}</b> zakázek</div>
             <div className="rounded-2xl bg-slate-100 px-4 py-2"><b>{employees.length}</b> lidí</div>
             <div className="rounded-2xl bg-green-100 px-4 py-2 text-green-800">{saveStatus}</div>
-            <div className={`rounded-2xl px-4 py-2 ${canEdit ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-500"}`}>{canEdit ? "Režim editace" : "Pouze náhled"}</div>
-            {!canEdit ? (
+            <div className={`rounded-2xl px-4 py-2 ${userRole === "admin" ? "bg-blue-100 text-blue-800" : userRole === "site" ? "bg-orange-100 text-orange-800" : "bg-slate-100 text-slate-500"}`}>
+              {userRole === "admin" ? "Admin" : userRole === "site" ? "Stavba" : "Pouze náhled"}
+            </div>
+            {userRole === "viewer" ? (
               <div className="flex gap-2">
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && loginAdmin()} placeholder="Heslo" className="w-32 rounded-2xl border px-3 py-2 text-sm" />
                 <Button className="rounded-2xl" onClick={loginAdmin}>Odemknout</Button>
               </div>
             ) : (
               <>
-                <Button variant="outline" className="rounded-2xl" onClick={() => setIsAdmin(false)}>Zamknout</Button>
-                <Button variant="outline" className="rounded-2xl" onClick={exportData}>Export dat</Button>
-                <Button variant="outline" className="rounded-2xl" onClick={() => fileInputRef.current?.click()}>Import dat</Button>
-                <input ref={fileInputRef} type="file" accept="application/json" onChange={importData} className="hidden" />
-                <Button variant="outline" className="rounded-2xl" onClick={resetLocalData}>Smazat data</Button>
+                <Button variant="outline" className="rounded-2xl" onClick={() => setUserRole("viewer")}>Zamknout</Button>
+                {canEditAll && (
+                  <>
+                    <Button variant="outline" className="rounded-2xl" onClick={exportData}>Export dat</Button>
+                    <Button variant="outline" className="rounded-2xl" onClick={() => fileInputRef.current?.click()}>Import dat</Button>
+                    <input ref={fileInputRef} type="file" accept="application/json" onChange={importData} className="hidden" />
+                    <Button variant="outline" className="rounded-2xl" onClick={resetLocalData}>Smazat data</Button>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -543,7 +616,8 @@ export default function App() {
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {canEditAll && (
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
               <div className="rounded-2xl border bg-white p-4">
                 <div className="mb-3 font-semibold">Materiál podle stavu</div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -565,6 +639,7 @@ export default function App() {
                 </div>
               </div>
             </div>
+            )}
           </CardContent>
         </Card>
 
@@ -610,6 +685,54 @@ export default function App() {
             </div>
           </CardContent>
         </Card>
+
+        {canEditSite && (
+          <Card className="rounded-3xl shadow-sm">
+            <CardContent className="p-4">
+              <div className="mb-3 flex items-center gap-2 font-semibold"><Users size={18} /> Docházka</div>
+              <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
+                <select value={attendanceEmployee} onChange={(e) => setAttendanceEmployee(e.target.value)} className="rounded-xl border bg-white px-3 py-2 text-sm">
+                  {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                </select>
+                <select value={attendanceProjectId} onChange={(e) => setAttendanceProjectId(e.target.value)} className="rounded-xl border bg-white px-3 py-2 text-sm">
+                  {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                </select>
+                <Button onClick={startAttendance} className="bg-green-700 hover:bg-green-800">Příchod</Button>
+                <Button onClick={stopAttendance} className="bg-red-700 hover:bg-red-800">Odchod</Button>
+              </div>
+              <div className="mt-3 text-xs text-slate-500">Obědová pauza 30 minut se odečítá automaticky po zadání odchodu.</div>
+
+              {canEditAll && (
+                <div className="mt-4 overflow-x-auto rounded-2xl border bg-white">
+                  <table className="w-full min-w-[720px] text-left text-sm">
+                    <thead className="bg-slate-100 text-xs uppercase text-slate-500">
+                      <tr>
+                        <th className="p-2">Zaměstnanec</th>
+                        <th className="p-2">Zakázka</th>
+                        <th className="p-2">Příchod</th>
+                        <th className="p-2">Odchod</th>
+                        <th className="p-2">Pauza</th>
+                        <th className="p-2">Čas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attendanceRecords.slice(0, 30).map((record) => (
+                        <tr key={record.id} className="border-t">
+                          <td className="p-2 font-medium">{record.employee}</td>
+                          <td className="p-2">{record.projectName}</td>
+                          <td className="p-2">{formatDateTime(record.arrival)}</td>
+                          <td className="p-2">{formatDateTime(record.departure)}</td>
+                          <td className="p-2">{record.lunchMinutes || 30} min</td>
+                          <td className="p-2 font-medium">{attendanceHours(record)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="rounded-3xl shadow-sm">
           <CardContent className="p-4">
@@ -745,7 +868,7 @@ export default function App() {
                   <div className="space-y-2">
                     {selectedItem.tasks.map((task) => (
                       <div key={task.id} className="flex items-center gap-2 rounded-2xl border p-2">
-                        <button disabled={!canEdit} onClick={() => toggleTask(task.id)}>
+                        <button disabled={!canEditSite} onClick={() => toggleTask(task.id)}>
                           {task.done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
                         </button>
                         <div className={`flex-1 text-sm ${task.done ? "line-through text-slate-400" : ""}`}>
@@ -756,8 +879,8 @@ export default function App() {
                   </div>
 
                   <div className="mt-3 flex gap-2">
-                    <input disabled={!canEdit} value={newTaskText} onChange={(e) => setNewTaskText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="Nový úkol" className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm" />
-                    <Button disabled={!canEdit} onClick={addTask} className="rounded-xl"><Plus size={16} /></Button>
+                    <input disabled={!canEditSite} value={newTaskText} onChange={(e) => setNewTaskText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="Nový úkol" className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm" />
+                    <Button disabled={!canEditSite} onClick={addTask} className="rounded-xl"><Plus size={16} /></Button>
                   </div>
                 </div>
 
@@ -768,14 +891,14 @@ export default function App() {
                       <div key={material.id} className="rounded-2xl border p-3">
                         <div className="font-medium text-sm">{material.text}</div>
 
-                        <textarea disabled={!canEdit} value={material.details || ""} onChange={(e) => updateMaterial(material.id, { details: e.target.value })} placeholder="Množství, barva, rozměr, poznámka…" className="mt-2 w-full rounded-xl border px-2 py-1 text-xs" rows={2} />
+                        <textarea disabled={!canEditSite} value={material.details || ""} onChange={(e) => updateMaterial(material.id, { details: e.target.value })} placeholder="Množství, barva, rozměr, poznámka…" className="mt-2 w-full rounded-xl border px-2 py-1 text-xs" rows={2} />
 
                         <div className="mt-2 flex flex-wrap gap-2">
-                          <select disabled={!canEdit} value={material.status} onChange={(e) => updateMaterial(material.id, { status: e.target.value })} className={`rounded-xl border px-2 py-1 text-xs font-medium ${materialStatusClass(material.status)}`}>
+                          <select disabled={!canEditSite} value={material.status} onChange={(e) => updateMaterial(material.id, { status: e.target.value })} className={`rounded-xl border px-2 py-1 text-xs font-medium ${materialStatusClass(material.status)}`}>
                             {materialStatuses.map((status) => <option key={status}>{status}</option>)}
                           </select>
 
-                          <select disabled={!canEdit} value={material.employee} onChange={(e) => updateMaterial(material.id, { employee: e.target.value })} className="rounded-xl border px-2 py-1 text-xs">
+                          <select disabled={!canEditSite} value={material.employee} onChange={(e) => updateMaterial(material.id, { employee: e.target.value })} className="rounded-xl border px-2 py-1 text-xs">
                             {employees.map((employee) => <option key={employee}>{employee}</option>)}
                           </select>
                         </div>
@@ -784,8 +907,8 @@ export default function App() {
                   </div>
 
                   <div className="mt-3 flex gap-2">
-                    <input disabled={!canEdit} value={newMaterialText} onChange={(e) => setNewMaterialText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addMaterial()} placeholder="Nový materiál" className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm" />
-                    <Button disabled={!canEdit} onClick={addMaterial} className="rounded-xl"><Plus size={16} /></Button>
+                    <input disabled={!canEditSite} value={newMaterialText} onChange={(e) => setNewMaterialText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addMaterial()} placeholder="Nový materiál" className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm" />
+                    <Button disabled={!canEditSite} onClick={addMaterial} className="rounded-xl"><Plus size={16} /></Button>
                   </div>
                 </div>
               </div>
