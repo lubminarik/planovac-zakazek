@@ -986,67 +986,6 @@ export default function App() {
             )}
           </div>
         </div>
-
-        <Card className="rounded-3xl shadow-sm">
-          <CardContent className="p-4">
-            <div className="mb-4 flex flex-col gap-1">
-              <div className="text-lg font-bold">Dashboard firmy</div>
-              <div className="text-sm text-slate-500">Rychlý přehled zakázek, materiálu a financí</div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border bg-slate-50 p-4">
-                <div className="text-xs font-medium uppercase text-slate-500">Zakázky celkem</div>
-                <div className="mt-2 text-3xl font-bold">{dashboard.totalProjects}</div>
-                <div className="mt-2 text-sm text-slate-500">Aktivní: {dashboard.activeProjects} • Start do 30 dnů: {dashboard.upcomingProjects}</div>
-              </div>
-
-              <div className={`rounded-2xl border p-4 ${dashboard.overdueProjects > 0 ? "bg-red-50" : "bg-green-50"}`}>
-                <div className="text-xs font-medium uppercase text-slate-500">Riziko termínu</div>
-                <div className={`mt-2 text-3xl font-bold ${dashboard.overdueProjects > 0 ? "text-red-700" : "text-green-700"}`}>{dashboard.overdueProjects}</div>
-                <div className="mt-2 text-sm text-slate-500">Zakázky po termínu bez dokončení</div>
-              </div>
-
-              <div className="rounded-2xl border bg-red-50 p-4">
-                <div className="text-xs font-medium uppercase text-slate-500">Materiál objednat</div>
-                <div className="mt-2 text-3xl font-bold text-red-700">{dashboard.materialByStatus["Objednat"] || 0}</div>
-                <div className="mt-2 text-sm text-slate-500">Ve výrobě: {dashboard.materialByStatus["Ve výrobě"] || 0} • Na cestě: {dashboard.materialByStatus["Na cestě"] || 0}</div>
-              </div>
-
-              <div className="rounded-2xl border bg-blue-50 p-4">
-                <div className="text-xs font-medium uppercase text-slate-500">Hotovo z úkolů</div>
-                <div className="mt-2 text-3xl font-bold text-blue-700">{dashboard.taskProgress}%</div>
-                <div className="mt-2 text-sm text-slate-500">{dashboard.doneTasks} / {dashboard.allTasks} úkolů</div>
-              </div>
-            </div>
-
-            {canEditAll && (
-              <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              <div className="rounded-2xl border bg-white p-4">
-                <div className="mb-3 font-semibold">Materiál podle stavu</div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  {materialStatuses.map((status) => (
-                    <div key={status} className={`rounded-xl border px-3 py-2 text-sm font-medium ${materialStatusClass(status)}`}>
-                      {status}: {dashboard.materialByStatus[status] || 0}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border bg-white p-4">
-                <div className="mb-3 font-semibold">Finance</div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">Částka dle SoD</div><div className="font-bold">{money(dashboard.finance.contract)}</div></div>
-                  <div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">Vyfakturováno</div><div className="font-bold">{money(dashboard.finance.invoiced)}</div></div>
-                  <div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">Materiál</div><div className="font-bold">{money(dashboard.finance.material)}</div></div>
-                  <div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">Zbývá fakturovat</div><div className="font-bold">{money(dashboard.finance.remaining)}</div></div>
-                </div>
-              </div>
-            </div>
-            )}
-          </CardContent>
-        </Card>
-
         <Card className="rounded-3xl shadow-sm">
           <CardContent className="p-4">
             <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
