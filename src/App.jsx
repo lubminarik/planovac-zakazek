@@ -986,7 +986,8 @@ export default function App() {
             )}
           </div>
         </div>
-        <Card className="rounded-3xl shadow-sm">
+
+    <Card className="rounded-3xl shadow-sm">
           <CardContent className="p-4">
             <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
@@ -1237,38 +1238,6 @@ export default function App() {
           </Card>
         )}
 
-        {
-          <Card className="rounded-3xl shadow-sm">
-            <CardContent className="p-4">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <div className="xl:col-span-2">
-                  <label className="mb-1 block text-xs font-medium text-slate-500">Název zakázky</label>
-                  <input disabled={!canEdit} value={selectedProject.name} onChange={(e) => updateProject(selectedProject.id, { name: e.target.value })} className="w-full rounded-xl border px-3 py-2" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-500">Datum od</label>
-                  <input disabled={!canEdit} type="date" value={selectedProject.startDate || todayString()} onChange={(e) => updateProject(selectedProject.id, { startDate: e.target.value })} className="w-full rounded-xl border px-3 py-2" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-500">Datum do</label>
-                  <input disabled={!canEdit} type="date" value={selectedProject.endDate || todayString()} onChange={(e) => updateProject(selectedProject.id, { endDate: e.target.value })} className="w-full rounded-xl border px-3 py-2" />
-                </div>
-                {canEdit && [
-                  ["Částka dle SoD", "contractAmount"],
-                  ["Částka za materiál", "materialAmount"],
-                  ["Částka za práci", "workAmount"],
-                  ["Dílčí fakturace", "invoicedAmount"],
-                ].map(([label, key]) => (
-                  <div key={key}>
-                    <label className="mb-1 block text-xs font-medium text-slate-500">{label}</label>
-                    <input value={selectedProject[key] || ""} onChange={(e) => updateProject(selectedProject.id, { [key]: e.target.value })} placeholder="0 Kč" className="w-full rounded-xl border px-3 py-2" />
-                  </div>
-                ))}
-              </div>
-              <textarea disabled={!canEdit} value={selectedProject.note || ""} onChange={(e) => updateProject(selectedProject.id, { note: e.target.value })} placeholder="Poznámka k zakázce" className="mt-3 w-full rounded-xl border px-3 py-2 text-sm" />
-            </CardContent>
-          </Card>
-        )}
 
         <Card className="rounded-3xl shadow-sm">
           <CardContent className="p-4">
