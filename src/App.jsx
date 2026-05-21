@@ -616,6 +616,36 @@ export default function App() {
     updateItem(selectedProject.id, selectedItem.id, { materials: selectedItem.materials.map((material) => (material.id === materialId ? { ...material, ...patch } : material)) });
   }
 
+  function addTaskToItem(itemId) {
+    if (!canEditSite || !selectedProject || !newTaskText.trim()) return;
+    const item = selectedProject.items.find((entry) => entry.id === itemId);
+    if (!item) return;
+    updateItem(selectedProject.id, itemId, { tasks: [...(item.tasks || []), { id: nextId("T"), text: newTaskText.trim(), done: false, employee: item.employee }] });
+    setNewTaskText("");
+  }
+
+  function updateTaskInItem(itemId, taskId, patch) {
+    if (!canEditSite || !selectedProject) return;
+    const item = selectedProject.items.find((entry) => entry.id === itemId);
+    if (!item) return;
+    updateItem(selectedProject.id, itemId, { tasks: (item.tasks || []).map((task) => (task.id === taskId ? { ...task, ...patch } : task)) });
+  }
+
+  function addMaterialToItem(itemId) {
+    if (!canEditSite || !selectedProject || !newMaterialText.trim()) return;
+    const item = selectedProject.items.find((entry) => entry.id === itemId);
+    if (!item) return;
+    updateItem(selectedProject.id, itemId, { materials: [...(item.materials || []), { id: nextId("M"), text: newMaterialText.trim(), details: "", status: "Objednat", employee: item.employee }] });
+    setNewMaterialText("");
+  }
+
+  function updateMaterialInItem(itemId, materialId, patch) {
+    if (!canEditSite || !selectedProject) return;
+    const item = selectedProject.items.find((entry) => entry.id === itemId);
+    if (!item) return;
+    updateItem(selectedProject.id, itemId, { materials: (item.materials || []).map((material) => (material.id === materialId ? { ...material, ...patch } : material)) });
+  }
+
   function resetLocalData() {
     if (!canEditAll) return;
     if (!window.confirm("Opravdu smazat uložená data v tomto prohlížeči?")) return;
@@ -1307,14 +1337,16 @@ export default function App() {
             <div className="mb-3 flex items-center gap-2 font-semibold"><Hammer size={18} /> Položky zakázky</div>
 
             <div className="overflow-x-auto rounded-2xl border bg-white">
-              <table className="w-full min-w-[1100px] text-left text-sm">
+              <table className="w-full min-w-[1500px] text-left text-sm">
                 <thead className="bg-slate-100 text-xs uppercase text-slate-500">
                   <tr>
                     <th className="p-2">Položka</th>
-                    <th className="p-2">Informace</th>
-                    <th className="p-2">Termín</th>
+                    <th className="p-2">Informace o položce</th>
+                    <th className="p-2">Termín od–do</th>
                     <th className="p-2">Pracovník</th>
-                    <th className="p-2">Stav materiálu</th>
+                    <th className="p-2">Stav</th>
+                    <th className="p-2">Úkoly</th>
+                    <th className="p-2">Materiál</th>
                     <th className="p-2">Akce</th>
                   </tr>
                 </thead>
@@ -1322,29 +1354,44 @@ export default function App() {
                   {selectedProject?.items.map((item) => {
                     const statuses = [...new Set((item.materials || []).map((material) => material.status))];
                     return (
-                      <tr
-                        key={item.id}
-                        onClick={() => setSelectedItemId(item.id)}
-                        className={`cursor-pointer border-t align-top transition ${selectedItemId === item.id ? "bg-slate-100" : "hover:bg-slate-50"}`}
-                      >
-                        <td className="p-2 font-medium">{item.name}</td>
-                        <td className="p-2 text-xs text-slate-600">
-                          {(item.tasks || []).length} úkolů • {(item.materials || []).length} materiálů
+                      <tr key={item.id} className={`border-t align-top ${selectedItemId === item.id ? "bg-slate-50" : ""}`}>
+                        <td className="p-2">
+                          <input
+                            disabled={!canEditAll}
+                            value={item.name}
+                            onFocus={() => setSelectedItemId(item.id)}
+                            onChange={(e) => updateItem(selectedProject.id, item.id, { name: e.target.value })}
+                            className="w-full min-w-[170px] rounded-xl border px-2 py-1 text-sm font-medium"
+                          />
                         </td>
-                        <td className="p-2 text-xs">{dateRangeLabel(item.startDate, item.endDate)}</td>
+                        <td className="p-2">
+                          <textarea
+                            disabled={!canEditAll}
+                            value={item.info || ""}
+                            onFocus={() => setSelectedItemId(item.id)}
+                            onChange={(e) => updateItem(selectedProject.id, item.id, { info: e.target.value })}
+                            placeholder="Poznámka, rozsah, specifikace…"
+                            className="h-20 w-full min-w-[220px] rounded-xl border px-2 py-1 text-xs"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <div className="grid min-w-[230px] gap-2">
+                            <input disabled={!canEditAll} type="date" value={item.startDate || todayString()} onChange={(e) => updateItem(selectedProject.id, item.id, { startDate: e.target.value })} className="rounded-xl border px-2 py-1 text-xs" />
+                            <input disabled={!canEditAll} type="date" value={item.endDate || todayString()} onChange={(e) => updateItem(selectedProject.id, item.id, { endDate: e.target.value })} className="rounded-xl border px-2 py-1 text-xs" />
+                          </div>
+                        </td>
                         <td className="p-2">
                           <select
                             disabled={!canEditSite}
                             value={item.employee}
-                            onClick={(e) => e.stopPropagation()}
                             onChange={(e) => updateItem(selectedProject.id, item.id, { employee: e.target.value })}
-                            className="rounded-xl border px-2 py-1 text-xs"
+                            className="min-w-[140px] rounded-xl border px-2 py-1 text-xs"
                           >
                             {employees.map((employee) => <option key={employee}>{employee}</option>)}
                           </select>
                         </td>
                         <td className="p-2">
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex min-w-[160px] flex-wrap gap-1">
                             {statuses.length === 0 && <span className="text-xs text-slate-400">Bez materiálu</span>}
                             {statuses.map((status) => (
                               <span key={status} className={`rounded-xl px-2 py-1 text-xs font-medium ${materialStatusClass(status)}`}>
@@ -1354,14 +1401,54 @@ export default function App() {
                           </div>
                         </td>
                         <td className="p-2">
+                          <div className="min-w-[300px] space-y-2">
+                            {(item.tasks || []).map((task) => (
+                              <div key={task.id} className="grid gap-2 rounded-xl border bg-white p-2 sm:grid-cols-[auto_1fr_120px] sm:items-center">
+                                <button disabled={!canEditSite} onClick={() => updateTaskInItem(item.id, task.id, { done: !task.done })}>
+                                  {task.done ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                                </button>
+                                <input
+                                  disabled={!canEditSite}
+                                  value={task.text}
+                                  onChange={(e) => updateTaskInItem(item.id, task.id, { text: e.target.value })}
+                                  className={`rounded-lg border px-2 py-1 text-xs ${task.done ? "text-slate-400 line-through" : ""}`}
+                                />
+                                <select disabled={!canEditSite} value={task.employee || item.employee || ""} onChange={(e) => updateTaskInItem(item.id, task.id, { employee: e.target.value })} className="rounded-lg border px-2 py-1 text-xs">
+                                  {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                                </select>
+                              </div>
+                            ))}
+                            <div className="flex gap-2">
+                              <input disabled={!canEditSite} value={selectedItemId === item.id ? newTaskText : ""} onFocus={() => setSelectedItemId(item.id)} onChange={(e) => setNewTaskText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTaskToItem(item.id)} placeholder="Nový úkol" className="min-w-0 flex-1 rounded-xl border px-2 py-1 text-xs" />
+                              <Button disabled={!canEditSite} onClick={() => addTaskToItem(item.id)} size="sm" className="rounded-xl"><Plus size={14} /></Button>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-2">
+                          <div className="min-w-[360px] space-y-2">
+                            {(item.materials || []).map((material) => (
+                              <div key={material.id} className="rounded-xl border bg-white p-2">
+                                <div className="grid gap-2 sm:grid-cols-[1fr_120px_120px]">
+                                  <input disabled={!canEditSite} value={material.text} onChange={(e) => updateMaterialInItem(item.id, material.id, { text: e.target.value })} className="rounded-lg border px-2 py-1 text-xs font-medium" />
+                                  <select disabled={!canEditSite} value={material.status} onChange={(e) => updateMaterialInItem(item.id, material.id, { status: e.target.value })} className={`rounded-lg border px-2 py-1 text-xs font-medium ${materialStatusClass(material.status)}`}>
+                                    {materialStatuses.map((status) => <option key={status}>{status}</option>)}
+                                  </select>
+                                  <select disabled={!canEditSite} value={material.employee} onChange={(e) => updateMaterialInItem(item.id, material.id, { employee: e.target.value })} className="rounded-lg border px-2 py-1 text-xs">
+                                    {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                                  </select>
+                                </div>
+                                <textarea disabled={!canEditSite} value={material.details || ""} onChange={(e) => updateMaterialInItem(item.id, material.id, { details: e.target.value })} placeholder="Množství, barva, rozměr, poznámka…" className="mt-2 w-full rounded-lg border px-2 py-1 text-xs" rows={2} />
+                              </div>
+                            ))}
+                            <div className="flex gap-2">
+                              <input disabled={!canEditSite} value={selectedItemId === item.id ? newMaterialText : ""} onFocus={() => setSelectedItemId(item.id)} onChange={(e) => setNewMaterialText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addMaterialToItem(item.id)} placeholder="Nový materiál" className="min-w-0 flex-1 rounded-xl border px-2 py-1 text-xs" />
+                              <Button disabled={!canEditSite} onClick={() => addMaterialToItem(item.id)} size="sm" className="rounded-xl"><Plus size={14} /></Button>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-2">
                           {canEditAll && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeItem(item.id);
-                              }}
-                              className="rounded-xl bg-red-100 px-3 py-1 text-xs text-red-700 hover:bg-red-200"
-                            >
+                            <button onClick={() => removeItem(item.id)} className="rounded-xl bg-red-100 px-3 py-1 text-xs text-red-700 hover:bg-red-200">
                               Smazat
                             </button>
                           )}
@@ -1386,98 +1473,6 @@ export default function App() {
             </div>
           </CardContent>
         </Card>
-
-        {selectedItem && (
-          <Card className="rounded-3xl shadow-sm">
-            <CardContent className="p-4">
-              <div className="mb-3 font-semibold">Detail položky</div>
-              <div className="grid gap-4 xl:grid-cols-[380px_1fr_1fr]">
-                <div className="space-y-4 rounded-2xl border bg-slate-50 p-4">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-500">Název položky</label>
-                    <input disabled={!canEdit} value={selectedItem.name} onChange={(e) => updateItem(selectedProject.id, selectedItem.id, { name: e.target.value })} className="w-full rounded-xl border bg-white px-3 py-2" />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-500">Datum od</label>
-                      <input disabled={!canEdit} type="date" value={selectedItem.startDate || todayString()} onChange={(e) => updateItem(selectedProject.id, selectedItem.id, { startDate: e.target.value })} className="w-full rounded-xl border bg-white px-3 py-2" />
-                    </div>
-
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-500">Datum do</label>
-                      <input disabled={!canEdit} type="date" value={selectedItem.endDate || todayString()} onChange={(e) => updateItem(selectedProject.id, selectedItem.id, { endDate: e.target.value })} className="w-full rounded-xl border bg-white px-3 py-2" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-500">Zaměstnanec / parta</label>
-                    <select disabled={!canEdit} value={selectedItem.employee} onChange={(e) => updateItem(selectedProject.id, selectedItem.id, { employee: e.target.value })} className="w-full rounded-xl border bg-white px-3 py-2">
-                      {employees.map((employee) => <option key={employee}>{employee}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border bg-white p-4">
-                  <div className="mb-3 font-semibold">Úkoly k položce</div>
-                  <div className="space-y-2">
-                    {selectedItem.tasks.map((task) => (
-                      <div key={task.id} className="grid gap-2 rounded-2xl border p-2 sm:grid-cols-[auto_1fr_180px] sm:items-center">
-                        <button disabled={!canEditSite} onClick={() => toggleTask(task.id)}>
-                          {task.done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
-                        </button>
-                        <div className={`text-sm ${task.done ? "line-through text-slate-400" : ""}`}>
-                          {task.text}
-                        </div>
-                        <select
-                          disabled={!canEditSite}
-                          value={task.employee || selectedItem.employee || ""}
-                          onChange={(e) => updateTask(task.id, { employee: e.target.value })}
-                          className="rounded-xl border px-2 py-1 text-xs"
-                        >
-                          {employees.map((employee) => <option key={employee}>{employee}</option>)}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-3 flex gap-2">
-                    <input disabled={!canEditSite} value={newTaskText} onChange={(e) => setNewTaskText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="Nový úkol" className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm" />
-                    <Button disabled={!canEditSite} onClick={addTask} className="rounded-xl"><Plus size={16} /></Button>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border bg-white p-4">
-                  <div className="mb-3 font-semibold">Materiál k položce</div>
-                  <div className="space-y-2">
-                    {selectedItem.materials.map((material) => (
-                      <div key={material.id} className="rounded-2xl border p-3">
-                        <div className="font-medium text-sm">{material.text}</div>
-
-                        <textarea disabled={!canEditSite} value={material.details || ""} onChange={(e) => updateMaterial(material.id, { details: e.target.value })} placeholder="Množství, barva, rozměr, poznámka…" className="mt-2 w-full rounded-xl border px-2 py-1 text-xs" rows={2} />
-
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <select disabled={!canEditSite} value={material.status} onChange={(e) => updateMaterial(material.id, { status: e.target.value })} className={`rounded-xl border px-2 py-1 text-xs font-medium ${materialStatusClass(material.status)}`}>
-                            {materialStatuses.map((status) => <option key={status}>{status}</option>)}
-                          </select>
-
-                          <select disabled={!canEditSite} value={material.employee} onChange={(e) => updateMaterial(material.id, { employee: e.target.value })} className="rounded-xl border px-2 py-1 text-xs">
-                            {employees.map((employee) => <option key={employee}>{employee}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-3 flex gap-2">
-                    <input disabled={!canEditSite} value={newMaterialText} onChange={(e) => setNewMaterialText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addMaterial()} placeholder="Nový materiál" className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm" />
-                    <Button disabled={!canEditSite} onClick={addMaterial} className="rounded-xl"><Plus size={16} /></Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {selectedProject && canEditSite && (
           <Card className="rounded-3xl shadow-sm">
