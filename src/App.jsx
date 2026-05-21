@@ -175,6 +175,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [employeesOpen, setEmployeesOpen] = useState(false);
   const [workloadOpen, setWorkloadOpen] = useState(false);
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
   const [lastBackupAt, setLastBackupAt] = useState("");
   const fileInputRef = useRef(null);
   const canEditAll = userRole === "admin";
@@ -1092,7 +1093,7 @@ export default function App() {
           </CardContent>
         </Card>
 
-        {canEditSite && (
+        {canEditSite && !canEditAll && (
           <Card className="rounded-3xl shadow-sm">
             <CardContent className="p-4">
               <div className="mb-3 flex items-center gap-2 font-semibold"><Users size={18} /> Docházka</div>
@@ -1537,6 +1538,117 @@ export default function App() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {canEditAll && (
+          <Card className="rounded-3xl shadow-sm">
+            <CardContent className="p-4">
+              <button
+                type="button"
+                onClick={() => setAttendanceOpen((open) => !open)}
+                className="flex w-full items-center justify-between rounded-2xl bg-slate-100 px-4 py-3 text-left font-semibold transition hover:bg-slate-200"
+              >
+                <span className="flex items-center gap-2"><Users size={18} /> Docházka</span>
+                <span className="text-sm text-slate-500">{attendanceReport.records.length} záznamů v měsíci • {attendanceOpen ? "skrýt" : "rozbalit"}</span>
+              </button>
+
+              {attendanceOpen && (
+                <div className="mt-4">
+                  <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
+                    <select value={attendanceEmployee} onChange={(e) => setAttendanceEmployee(e.target.value)} className="rounded-xl border bg-white px-3 py-2 text-sm">
+                      {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                    </select>
+                    <select value={attendanceProjectId} onChange={(e) => setAttendanceProjectId(e.target.value)} className="rounded-xl border bg-white px-3 py-2 text-sm">
+                      {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                    </select>
+                    <Button disabled={hasOpenAttendance} onClick={startAttendance} className="bg-green-700 hover:bg-green-800">Příchod</Button>
+                    <Button disabled={!hasOpenAttendance} onClick={stopAttendance} className="bg-red-700 hover:bg-red-800">Odchod</Button>
+                  </div>
+                  <div className="mt-3 text-xs text-slate-500">
+                    {hasOpenAttendance ? "Příchod je zapsaný – teď je možné zadat už jen odchod." : "Obědová pauza 30 minut se odečítá automaticky po zadání odchodu."}
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border bg-slate-50 p-4">
+                    <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="font-semibold">Měsíční výkaz docházky</div>
+                        <div className="text-xs text-slate-500">Součty pro mzdy, zakázky a přehled kdo kde dělal</div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <input type="month" value={attendanceMonth} onChange={(e) => setAttendanceMonth(e.target.value)} className="rounded-xl border bg-white px-3 py-2 text-sm" />
+                        <Button variant="outline" onClick={exportAttendanceCsv}>Export pro mzdy CSV</Button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-2xl bg-white p-4"><div className="text-xs uppercase text-slate-500">Celkem hodin</div><div className="mt-1 text-2xl font-bold">{formatMinutes(attendanceReport.totalMinutes)}</div></div>
+                      <div className="rounded-2xl bg-white p-4"><div className="text-xs uppercase text-slate-500">Počet záznamů</div><div className="mt-1 text-2xl font-bold">{attendanceReport.records.length}</div></div>
+                      <div className="rounded-2xl bg-white p-4"><div className="text-xs uppercase text-slate-500">Zakázky s docházkou</div><div className="mt-1 text-2xl font-bold">{attendanceReport.byProject.length}</div></div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                      <div className="rounded-2xl border bg-white p-4">
+                        <div className="mb-3 font-semibold">Součet podle zaměstnanců</div>
+                        <div className="space-y-2">
+                          {attendanceReport.byEmployee.length === 0 && <div className="text-sm text-slate-500">Pro tento měsíc zatím nejsou záznamy.</div>}
+                          {attendanceReport.byEmployee.map((row) => (
+                            <div key={row.employee} className="flex items-center justify-between rounded-xl bg-slate-100 px-3 py-2 text-sm">
+                              <span className="font-medium">{row.employee}</span>
+                              <span>{formatMinutes(row.minutes)} • {row.records} záznamů</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border bg-white p-4">
+                        <div className="mb-3 font-semibold">Součet podle zakázek</div>
+                        <div className="space-y-2">
+                          {attendanceReport.byProject.length === 0 && <div className="text-sm text-slate-500">Pro tento měsíc zatím nejsou záznamy.</div>}
+                          {attendanceReport.byProject.map((row) => (
+                            <div key={row.projectId} className="rounded-xl bg-slate-100 px-3 py-2 text-sm">
+                              <div className="flex items-center justify-between gap-3"><span className="font-medium">{row.projectName}</span><span>{formatMinutes(row.minutes)}</span></div>
+                              <div className="mt-1 text-xs text-slate-500">Dělali: {row.people.join(", ") || "—"}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border bg-white p-4">
+                    <div className="mb-3 font-semibold">Ruční doplnění docházky</div>
+                    <div className="grid gap-2 md:grid-cols-[1fr_1fr_130px_110px_110px_100px_auto]">
+                      <select value={newManualAttendance.employee} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, employee: e.target.value }))} className="rounded-xl border px-3 py-2 text-sm">{employees.map((employee) => <option key={employee}>{employee}</option>)}</select>
+                      <select value={newManualAttendance.projectId} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, projectId: e.target.value }))} className="rounded-xl border px-3 py-2 text-sm">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
+                      <input type="date" value={newManualAttendance.date} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, date: e.target.value }))} className="rounded-xl border px-3 py-2 text-sm" />
+                      <input type="time" value={newManualAttendance.arrival} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, arrival: e.target.value }))} className="rounded-xl border px-3 py-2 text-sm" />
+                      <input type="time" value={newManualAttendance.departure} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, departure: e.target.value }))} className="rounded-xl border px-3 py-2 text-sm" />
+                      <input type="number" value={newManualAttendance.lunchMinutes} onChange={(e) => setNewManualAttendance((prev) => ({ ...prev, lunchMinutes: Number(e.target.value) || 0 }))} className="rounded-xl border px-3 py-2 text-sm" />
+                      <Button onClick={addManualAttendance}>Doplnit</Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 overflow-x-auto rounded-2xl border bg-white">
+                    <table className="w-full min-w-[980px] text-left text-sm">
+                      <thead className="bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="p-2">Zaměstnanec</th><th className="p-2">Zakázka</th><th className="p-2">Příchod</th><th className="p-2">Odchod</th><th className="p-2">Pauza</th><th className="p-2">Čas</th></tr></thead>
+                      <tbody>
+                        {attendanceReport.records.slice(0, 80).map((record) => (
+                          <tr key={record.id} className="border-t align-top">
+                            <td className="p-2"><select value={record.employee} onChange={(e) => updateAttendanceRecord(record.id, { employee: e.target.value })} className="w-full rounded-lg border px-2 py-1 text-xs">{employees.map((employee) => <option key={employee}>{employee}</option>)}</select></td>
+                            <td className="p-2"><select value={record.projectId} onChange={(e) => { const project = projects.find((item) => item.id === e.target.value); updateAttendanceRecord(record.id, { projectId: e.target.value, projectName: project?.name || "" }); }} className="w-full rounded-lg border px-2 py-1 text-xs">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></td>
+                            <td className="p-2"><input type="datetime-local" value={dateTimeToLocalInput(record.arrival)} onChange={(e) => updateAttendanceRecord(record.id, { arrival: localInputToIso(e.target.value) })} className="rounded-lg border px-2 py-1 text-xs" /></td>
+                            <td className="p-2"><input type="datetime-local" value={dateTimeToLocalInput(record.departure)} onChange={(e) => updateAttendanceRecord(record.id, { departure: localInputToIso(e.target.value) })} className="rounded-lg border px-2 py-1 text-xs" /></td>
+                            <td className="p-2"><input type="number" value={record.lunchMinutes || 30} onChange={(e) => updateAttendanceRecord(record.id, { lunchMinutes: Number(e.target.value) || 0 })} className="w-20 rounded-lg border px-2 py-1 text-xs" /></td>
+                            <td className="p-2 font-medium">{attendanceHours(record)}<button onClick={() => removeAttendanceRecord(record.id)} className="ml-2 rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700">Smazat</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
