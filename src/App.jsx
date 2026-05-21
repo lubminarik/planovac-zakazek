@@ -175,6 +175,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [employeesOpen, setEmployeesOpen] = useState(false);
   const [workloadOpen, setWorkloadOpen] = useState(false);
+  const [lastBackupAt, setLastBackupAt] = useState("");
   const fileInputRef = useRef(null);
   const canEditAll = userRole === "admin";
   const canEditSite = userRole === "admin" || userRole === "site";
@@ -223,18 +224,35 @@ export default function App() {
     setSaveStatus("Ukládám do cloudu…");
     setSyncError("");
 
+    const now = new Date().toISOString();
+
     const { error } = await supabase
       .from("planner_state")
-      .update({ data, updated_at: new Date().toISOString() })
+      .update({ data, updated_at: now })
       .eq("id", PLANNER_STATE_ID);
 
     if (error) {
       console.error(error);
       setSyncError(error.message);
       setSaveStatus("Chyba uložení");
-    } else {
-      setSaveStatus("Uloženo v cloudu");
+      return;
     }
+
+    // Automatická záloha maximálně jednou za 10 minut, aby se zbytečně neplnila databáze.
+    const shouldBackup = !lastBackupAt || Date.now() - new Date(lastBackupAt).getTime() > 10 * 60 * 1000;
+    if (shouldBackup) {
+      const { error: backupError } = await supabase
+        .from("planner_backups")
+        .insert({ data, reason: "autosave", created_at: now });
+
+      if (backupError) {
+        console.warn("Záloha se nepodařila:", backupError.message);
+      } else {
+        setLastBackupAt(now);
+      }
+    }
+
+    setSaveStatus("Uloženo v cloudu");
   }
 
   useEffect(() => {
@@ -392,6 +410,34 @@ export default function App() {
   function updateProject(projectId, patch) {
     if (!canEditAll) return;
     setProjects((prev) => prev.map((project) => (project.id === projectId ? { ...project, ...patch } : project)));
+  }
+
+  function moveProject(dragProjectId, targetProjectId) {
+    if (!canEditAll || !dragProjectId || !targetProjectId || dragProjectId === targetProjectId) return;
+
+    setProjects((prev) => {
+      const fromIndex = prev.findIndex((project) => project.id === dragProjectId);
+      const toIndex = prev.findIndex((project) => project.id === targetProjectId);
+      if (fromIndex === -1 || toIndex === -1) return prev;
+
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  }
+
+  function handleProjectDragStart(event, projectId) {
+    if (!canEditAll) return;
+    event.dataTransfer.setData("text/plain", projectId);
+    event.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleProjectDrop(event, targetProjectId) {
+    if (!canEditAll) return;
+    event.preventDefault();
+    const dragProjectId = event.dataTransfer.getData("text/plain");
+    moveProject(dragProjectId, targetProjectId);
   }
 
   function updateItem(projectId, itemId, patch) {
@@ -974,7 +1020,16 @@ export default function App() {
                   ))}
                   {projects.map((project) => (
                     <React.Fragment key={project.id}>
-                      <div className="truncate rounded-xl bg-slate-50 px-2 py-1 font-medium">{project.name}</div>
+                      <div
+                        draggable={canEditAll}
+                        onDragStart={(event) => handleProjectDragStart(event, project.id)}
+                        onDragOver={(event) => canEditAll && event.preventDefault()}
+                        onDrop={(event) => handleProjectDrop(event, project.id)}
+                        className={`truncate rounded-xl px-2 py-1 font-medium ${canEditAll ? "cursor-move bg-slate-100 hover:bg-slate-200" : "bg-slate-50"}`}
+                        title={canEditAll ? "Přetáhni zakázku pro změnu pořadí" : project.name}
+                      >
+                        {project.name}
+                      </div>
                       {weeks.map((week) => (
                         <div
                           key={week}
@@ -1144,11 +1199,16 @@ export default function App() {
               {projects.map((project) => (
                 <button
                   key={project.id}
+                  draggable={canEditAll}
+                  onDragStart={(event) => handleProjectDragStart(event, project.id)}
+                  onDragOver={(event) => canEditAll && event.preventDefault()}
+                  onDrop={(event) => handleProjectDrop(event, project.id)}
                   onClick={() => {
                     setSelectedProjectId(project.id);
                     setSelectedItemId(project.items[0]?.id);
                   }}
-                  className={`rounded-2xl border p-3 text-left transition ${selectedProjectId === project.id ? "border-slate-900 bg-slate-100" : "bg-white hover:bg-slate-50"}`}
+                  className={`rounded-2xl border p-3 text-left transition ${canEditAll ? "cursor-move" : ""} ${selectedProjectId === project.id ? "border-slate-900 bg-slate-100" : "bg-white hover:bg-slate-50"}`}
+                  title={canEditAll ? "Přetáhni pro změnu pořadí" : project.name}
                 >
                   <div className="flex items-center gap-2">
                     <div className={`h-3 w-3 rounded-full ${project.color || "bg-slate-400"}`} />
