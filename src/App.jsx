@@ -280,7 +280,7 @@ export default function App() {
   }
 
   function updateItem(projectId, itemId, patch) {
-    if (!canEditAll) return;
+    if (!canEditSite) return;
     setProjects((prev) =>
       prev.map((project) =>
         project.id !== projectId
@@ -534,8 +534,7 @@ export default function App() {
 
     const csv = [header, ...rows]
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(";"))
-      .join("
-");
+      .join("\n");
 
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
