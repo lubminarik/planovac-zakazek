@@ -1305,20 +1305,72 @@ export default function App() {
         <Card className="rounded-3xl shadow-sm">
           <CardContent className="p-4">
             <div className="mb-3 flex items-center gap-2 font-semibold"><Hammer size={18} /> Položky zakázky</div>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {selectedProject?.items.map((item) => (
-                <div key={item.id} className={`rounded-2xl border p-3 ${selectedItemId === item.id ? "border-slate-900 bg-slate-100" : "bg-white hover:bg-slate-50"}`}>
-                  <button onClick={() => setSelectedItemId(item.id)} className="w-full text-left">
-                    <div className="font-medium">{item.name}</div>
-                    <div className="mt-1 text-xs text-slate-500">{dateRangeLabel(item.startDate, item.endDate)} • {item.employee}</div>
-                  </button>
-                  {canEditAll && (
-                    <button onClick={() => removeItem(item.id)} className="mt-2 rounded-xl bg-red-100 px-3 py-1 text-xs text-red-700 hover:bg-red-200">
-                      Smazat položku
-                    </button>
-                  )}
-                </div>
-              ))}
+
+            <div className="overflow-x-auto rounded-2xl border bg-white">
+              <table className="w-full min-w-[1100px] text-left text-sm">
+                <thead className="bg-slate-100 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="p-2">Položka</th>
+                    <th className="p-2">Informace</th>
+                    <th className="p-2">Termín</th>
+                    <th className="p-2">Pracovník</th>
+                    <th className="p-2">Stav materiálu</th>
+                    <th className="p-2">Akce</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedProject?.items.map((item) => {
+                    const statuses = [...new Set((item.materials || []).map((material) => material.status))];
+                    return (
+                      <tr
+                        key={item.id}
+                        onClick={() => setSelectedItemId(item.id)}
+                        className={`cursor-pointer border-t align-top transition ${selectedItemId === item.id ? "bg-slate-100" : "hover:bg-slate-50"}`}
+                      >
+                        <td className="p-2 font-medium">{item.name}</td>
+                        <td className="p-2 text-xs text-slate-600">
+                          {(item.tasks || []).length} úkolů • {(item.materials || []).length} materiálů
+                        </td>
+                        <td className="p-2 text-xs">{dateRangeLabel(item.startDate, item.endDate)}</td>
+                        <td className="p-2">
+                          <select
+                            disabled={!canEditSite}
+                            value={item.employee}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => updateItem(selectedProject.id, item.id, { employee: e.target.value })}
+                            className="rounded-xl border px-2 py-1 text-xs"
+                          >
+                            {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                          </select>
+                        </td>
+                        <td className="p-2">
+                          <div className="flex flex-wrap gap-1">
+                            {statuses.length === 0 && <span className="text-xs text-slate-400">Bez materiálu</span>}
+                            {statuses.map((status) => (
+                              <span key={status} className={`rounded-xl px-2 py-1 text-xs font-medium ${materialStatusClass(status)}`}>
+                                {status}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="p-2">
+                          {canEditAll && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeItem(item.id);
+                              }}
+                              className="rounded-xl bg-red-100 px-3 py-1 text-xs text-red-700 hover:bg-red-200"
+                            >
+                              Smazat
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
 
             <div className="mt-3 flex gap-2">
