@@ -1,15 +1,14 @@
-# Plánovač zakázek
+# Plánovač zakázek – Supabase verze
 
-React/Vite aplikace připravená pro Vercel.
+React/Vite aplikace pro Vercel se sdíleným ukládáním do Supabase.
 
-Heslo pro editaci: `lubos`
+## Vercel Environment Variables
 
-Obsahuje:
-- zakázky
-- položky zakázky
-- úkoly
-- materiál
-- zaměstnance
-- nepřítomnosti zaměstnanců
-- vytíženost
-- export/import dat
+Ve Vercelu nastavte:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+## Heslo pro editaci
+
+`lubos`
