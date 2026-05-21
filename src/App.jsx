@@ -174,6 +174,7 @@ export default function App() {
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) || projects[0];
   const selectedItem = selectedProject?.items.find((item) => item.id === selectedItemId) || selectedProject?.items[0];
+  const hasOpenAttendance = attendanceRecords.some((record) => record.employee === attendanceEmployee && !record.departure);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth }));
@@ -327,10 +328,37 @@ export default function App() {
     setNewTaskText("");
   }
 
+  function updateTask(taskId, patch) {
+    if (!canEditSite || !selectedProject || !selectedItem) return;
+    updateItem(selectedProject.id, selectedItem.id, {
+      tasks: selectedItem.tasks.map((task) => (task.id === taskId ? { ...task, ...patch } : task)),
+    });
+  }
+
   function addMaterial() {
     if (!canEditSite || !selectedProject || !selectedItem || !newMaterialText.trim()) return;
     updateItem(selectedProject.id, selectedItem.id, { materials: [...selectedItem.materials, { id: nextId("M"), text: newMaterialText.trim(), details: "", status: "Objednat", employee: selectedItem.employee }] });
     setNewMaterialText("");
+  }
+
+  function removeItem(itemId) {
+    if (!canEditAll || !selectedProject) return;
+    if (selectedProject.items.length <= 1) {
+      alert("Zakázka musí mít alespoň jednu položku.");
+      return;
+    }
+    if (!window.confirm("Opravdu smazat tuto položku zakázky?")) return;
+
+    const remainingItems = selectedProject.items.filter((item) => item.id !== itemId);
+    setProjects((prev) =>
+      prev.map((project) =>
+        project.id === selectedProject.id ? { ...project, items: remainingItems } : project
+      )
+    );
+
+    if (selectedItemId === itemId) {
+      setSelectedItemId(remainingItems[0]?.id);
+    }
   }
 
   function addEmployee() {
@@ -762,10 +790,12 @@ export default function App() {
                 <select value={attendanceProjectId} onChange={(e) => setAttendanceProjectId(e.target.value)} className="rounded-xl border bg-white px-3 py-2 text-sm">
                   {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
                 </select>
-                <Button onClick={startAttendance} className="bg-green-700 hover:bg-green-800">Příchod</Button>
-                <Button onClick={stopAttendance} className="bg-red-700 hover:bg-red-800">Odchod</Button>
+                <Button disabled={hasOpenAttendance} onClick={startAttendance} className="bg-green-700 hover:bg-green-800">Příchod</Button>
+                <Button disabled={!hasOpenAttendance} onClick={stopAttendance} className="bg-red-700 hover:bg-red-800">Odchod</Button>
               </div>
-              <div className="mt-3 text-xs text-slate-500">Obědová pauza 30 minut se odečítá automaticky po zadání odchodu.</div>
+              <div className="mt-3 text-xs text-slate-500">
+                {hasOpenAttendance ? "Příchod je zapsaný – teď je možné zadat už jen odchod." : "Obědová pauza 30 minut se odečítá automaticky po zadání odchodu."}
+              </div>
 
               {canEditAll && (
                 <>
@@ -942,10 +972,17 @@ export default function App() {
             <div className="mb-3 flex items-center gap-2 font-semibold"><Hammer size={18} /> Položky zakázky</div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {selectedProject?.items.map((item) => (
-                <button key={item.id} onClick={() => setSelectedItemId(item.id)} className={`rounded-2xl border p-3 text-left ${selectedItemId === item.id ? "border-slate-900 bg-slate-100" : "bg-white hover:bg-slate-50"}`}>
-                  <div className="font-medium">{item.name}</div>
-                  <div className="mt-1 text-xs text-slate-500">{dateRangeLabel(item.startDate, item.endDate)} • {item.employee}</div>
-                </button>
+                <div key={item.id} className={`rounded-2xl border p-3 ${selectedItemId === item.id ? "border-slate-900 bg-slate-100" : "bg-white hover:bg-slate-50"}`}>
+                  <button onClick={() => setSelectedItemId(item.id)} className="w-full text-left">
+                    <div className="font-medium">{item.name}</div>
+                    <div className="mt-1 text-xs text-slate-500">{dateRangeLabel(item.startDate, item.endDate)} • {item.employee}</div>
+                  </button>
+                  {canEditAll && (
+                    <button onClick={() => removeItem(item.id)} className="mt-2 rounded-xl bg-red-100 px-3 py-1 text-xs text-red-700 hover:bg-red-200">
+                      Smazat položku
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
 
@@ -998,13 +1035,21 @@ export default function App() {
                   <div className="mb-3 font-semibold">Úkoly k položce</div>
                   <div className="space-y-2">
                     {selectedItem.tasks.map((task) => (
-                      <div key={task.id} className="flex items-center gap-2 rounded-2xl border p-2">
+                      <div key={task.id} className="grid gap-2 rounded-2xl border p-2 sm:grid-cols-[auto_1fr_180px] sm:items-center">
                         <button disabled={!canEditSite} onClick={() => toggleTask(task.id)}>
                           {task.done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
                         </button>
-                        <div className={`flex-1 text-sm ${task.done ? "line-through text-slate-400" : ""}`}>
+                        <div className={`text-sm ${task.done ? "line-through text-slate-400" : ""}`}>
                           {task.text}
                         </div>
+                        <select
+                          disabled={!canEditSite}
+                          value={task.employee || selectedItem.employee || ""}
+                          onChange={(e) => updateTask(task.id, { employee: e.target.value })}
+                          className="rounded-xl border px-2 py-1 text-xs"
+                        >
+                          {employees.map((employee) => <option key={employee}>{employee}</option>)}
+                        </select>
                       </div>
                     ))}
                   </div>
