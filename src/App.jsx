@@ -725,20 +725,19 @@ export default function App() {
 
   function stopAttendance() {
     if (!canEditSite || !attendanceEmployee) return;
+
     const openRecord = attendanceRecords.find((record) => record.employee === attendanceEmployee && !record.departure);
     if (!openRecord) {
       alert("Tento zaměstnanec nemá otevřený příchod.");
       return;
     }
 
-    const selectedProject = projects.find((project) => project.id === attendanceProjectId);
-
-    if (!canEditSite || !attendanceEmployee) return;
-    const openRecord = attendanceRecords.find((record) => record.employee === attendanceEmployee && !record.departure);
-    if (!openRecord) {
-      alert("Tento zaměstnanec nemá otevřený příchod.");
+    if (!attendanceProjectId) {
+      alert("Před odchodem vyber zakázku.");
       return;
     }
+
+    const selectedAttendanceProject = projects.find((project) => project.id === attendanceProjectId);
 
     setAttendanceRecords((prev) =>
       prev.map((record) =>
@@ -746,7 +745,7 @@ export default function App() {
           ? {
               ...record,
               projectId: attendanceProjectId,
-              projectName: selectedProject?.name || "",
+              projectName: selectedAttendanceProject?.name || "",
               departure: new Date().toISOString(),
               lunchMinutes: 30,
             }
