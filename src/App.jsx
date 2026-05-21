@@ -162,6 +162,7 @@ export default function App() {
   const [attendanceRecords, setAttendanceRecords] = useState(savedData?.attendanceRecords || []);
   const [attendanceEmployee, setAttendanceEmployee] = useState(savedData?.attendanceEmployee || initialEmployees[0]);
   const [attendanceProjectId, setAttendanceProjectId] = useState(savedData?.attendanceProjectId || initialProjects[0].id);
+  const [attendanceMonth, setAttendanceMonth] = useState(savedData?.attendanceMonth || todayString().slice(0, 7));
   const [password, setPassword] = useState("");
   const [employeesOpen, setEmployeesOpen] = useState(false);
   const [workloadOpen, setWorkloadOpen] = useState(false);
@@ -175,9 +176,9 @@ export default function App() {
   const selectedItem = selectedProject?.items.find((item) => item.id === selectedItemId) || selectedProject?.items[0];
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId }));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth }));
     setSaveStatus("Uloženo");
-  }, [employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId]);
+  }, [employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth]);
 
   const workload = useMemo(() => {
     const map = {};
@@ -484,6 +485,69 @@ export default function App() {
     return new Date(value).toLocaleString("cs-CZ", { dateStyle: "short", timeStyle: "short" });
   }
 
+  function attendanceMinutes(record) {
+    if (!record.arrival || !record.departure) return 0;
+    const start = new Date(record.arrival);
+    const end = new Date(record.departure);
+    return Math.max(0, Math.round((end - start) / 60000) - (record.lunchMinutes || 30));
+  }
+
+  function formatMinutes(minutes) {
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return `${hours} h ${rest} min`;
+  }
+
+  const attendanceReport = useMemo(() => {
+    const records = attendanceRecords.filter((record) => (record.arrival || "").slice(0, 7) === attendanceMonth);
+
+    const byEmployee = employees.map((employee) => {
+      const employeeRecords = records.filter((record) => record.employee === employee);
+      const minutes = employeeRecords.reduce((sum, record) => sum + attendanceMinutes(record), 0);
+      return { employee, records: employeeRecords.length, minutes };
+    }).filter((row) => row.records > 0 || row.minutes > 0);
+
+    const byProject = projects.map((project) => {
+      const projectRecords = records.filter((record) => record.projectId === project.id);
+      const minutes = projectRecords.reduce((sum, record) => sum + attendanceMinutes(record), 0);
+      const people = [...new Set(projectRecords.map((record) => record.employee))];
+      return { projectId: project.id, projectName: project.name, records: projectRecords.length, minutes, people };
+    }).filter((row) => row.records > 0 || row.minutes > 0);
+
+    const totalMinutes = records.reduce((sum, record) => sum + attendanceMinutes(record), 0);
+
+    return { records, byEmployee, byProject, totalMinutes };
+  }, [attendanceRecords, attendanceMonth, employees, projects]);
+
+  function exportAttendanceCsv() {
+    const header = ["Datum", "Zaměstnanec", "Zakázka", "Příchod", "Odchod", "Pauza min", "Odpracováno min", "Odpracováno"];
+    const rows = attendanceReport.records.map((record) => [
+      record.arrival ? new Date(record.arrival).toLocaleDateString("cs-CZ") : "",
+      record.employee,
+      record.projectName,
+      record.arrival ? new Date(record.arrival).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) : "",
+      record.departure ? new Date(record.departure).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) : "",
+      record.lunchMinutes || 30,
+      attendanceMinutes(record),
+      formatMinutes(attendanceMinutes(record)),
+    ]);
+
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(";"))
+      .join("
+");
+
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `dochazka-${attendanceMonth}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function exportData() {
     const data = {
       version: 1,
@@ -497,6 +561,7 @@ export default function App() {
       attendanceRecords,
       attendanceEmployee,
       attendanceProjectId,
+      attendanceMonth,
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -537,6 +602,7 @@ export default function App() {
         setAttendanceRecords(imported.attendanceRecords || []);
         setAttendanceEmployee(imported.attendanceEmployee || imported.employees?.[0] || "");
         setAttendanceProjectId(imported.attendanceProjectId || imported.projects?.[0]?.id || "");
+        setAttendanceMonth(imported.attendanceMonth || todayString().slice(0, 7));
         alert("Data byla úspěšně importována.");
       } catch (error) {
         alert("Import se nepovedl. Zkontrolujte, že nahráváte správný JSON soubor.");
@@ -703,32 +769,98 @@ export default function App() {
               <div className="mt-3 text-xs text-slate-500">Obědová pauza 30 minut se odečítá automaticky po zadání odchodu.</div>
 
               {canEditAll && (
-                <div className="mt-4 overflow-x-auto rounded-2xl border bg-white">
-                  <table className="w-full min-w-[720px] text-left text-sm">
-                    <thead className="bg-slate-100 text-xs uppercase text-slate-500">
-                      <tr>
-                        <th className="p-2">Zaměstnanec</th>
-                        <th className="p-2">Zakázka</th>
-                        <th className="p-2">Příchod</th>
-                        <th className="p-2">Odchod</th>
-                        <th className="p-2">Pauza</th>
-                        <th className="p-2">Čas</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {attendanceRecords.slice(0, 30).map((record) => (
-                        <tr key={record.id} className="border-t">
-                          <td className="p-2 font-medium">{record.employee}</td>
-                          <td className="p-2">{record.projectName}</td>
-                          <td className="p-2">{formatDateTime(record.arrival)}</td>
-                          <td className="p-2">{formatDateTime(record.departure)}</td>
-                          <td className="p-2">{record.lunchMinutes || 30} min</td>
-                          <td className="p-2 font-medium">{attendanceHours(record)}</td>
+                <>
+                  <div className="mt-4 rounded-2xl border bg-slate-50 p-4">
+                    <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="font-semibold">Měsíční výkaz docházky</div>
+                        <div className="text-xs text-slate-500">Součty pro mzdy, zakázky a přehled kdo kde dělal</div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <input
+                          type="month"
+                          value={attendanceMonth}
+                          onChange={(e) => setAttendanceMonth(e.target.value)}
+                          className="rounded-xl border bg-white px-3 py-2 text-sm"
+                        />
+                        <Button variant="outline" onClick={exportAttendanceCsv}>Export pro mzdy CSV</Button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-2xl bg-white p-4">
+                        <div className="text-xs uppercase text-slate-500">Celkem hodin</div>
+                        <div className="mt-1 text-2xl font-bold">{formatMinutes(attendanceReport.totalMinutes)}</div>
+                      </div>
+                      <div className="rounded-2xl bg-white p-4">
+                        <div className="text-xs uppercase text-slate-500">Počet záznamů</div>
+                        <div className="mt-1 text-2xl font-bold">{attendanceReport.records.length}</div>
+                      </div>
+                      <div className="rounded-2xl bg-white p-4">
+                        <div className="text-xs uppercase text-slate-500">Zakázky s docházkou</div>
+                        <div className="mt-1 text-2xl font-bold">{attendanceReport.byProject.length}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                      <div className="rounded-2xl border bg-white p-4">
+                        <div className="mb-3 font-semibold">Součet podle zaměstnanců</div>
+                        <div className="space-y-2">
+                          {attendanceReport.byEmployee.length === 0 && <div className="text-sm text-slate-500">Pro tento měsíc zatím nejsou záznamy.</div>}
+                          {attendanceReport.byEmployee.map((row) => (
+                            <div key={row.employee} className="flex items-center justify-between rounded-xl bg-slate-100 px-3 py-2 text-sm">
+                              <span className="font-medium">{row.employee}</span>
+                              <span>{formatMinutes(row.minutes)} • {row.records} záznamů</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border bg-white p-4">
+                        <div className="mb-3 font-semibold">Součet podle zakázek</div>
+                        <div className="space-y-2">
+                          {attendanceReport.byProject.length === 0 && <div className="text-sm text-slate-500">Pro tento měsíc zatím nejsou záznamy.</div>}
+                          {attendanceReport.byProject.map((row) => (
+                            <div key={row.projectId} className="rounded-xl bg-slate-100 px-3 py-2 text-sm">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="font-medium">{row.projectName}</span>
+                                <span>{formatMinutes(row.minutes)}</span>
+                              </div>
+                              <div className="mt-1 text-xs text-slate-500">Dělali: {row.people.join(", ") || "—"}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 overflow-x-auto rounded-2xl border bg-white">
+                    <table className="w-full min-w-[720px] text-left text-sm">
+                      <thead className="bg-slate-100 text-xs uppercase text-slate-500">
+                        <tr>
+                          <th className="p-2">Zaměstnanec</th>
+                          <th className="p-2">Zakázka</th>
+                          <th className="p-2">Příchod</th>
+                          <th className="p-2">Odchod</th>
+                          <th className="p-2">Pauza</th>
+                          <th className="p-2">Čas</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {attendanceReport.records.slice(0, 80).map((record) => (
+                          <tr key={record.id} className="border-t">
+                            <td className="p-2 font-medium">{record.employee}</td>
+                            <td className="p-2">{record.projectName}</td>
+                            <td className="p-2">{formatDateTime(record.arrival)}</td>
+                            <td className="p-2">{formatDateTime(record.departure)}</td>
+                            <td className="p-2">{record.lunchMinutes || 30} min</td>
+                            <td className="p-2 font-medium">{attendanceHours(record)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
