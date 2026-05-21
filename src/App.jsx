@@ -1214,6 +1214,44 @@ export default function App() {
         {selectedProject && (
           <Card className="rounded-3xl shadow-sm">
             <CardContent className="p-4">
+              <div className="mb-4 grid gap-3 xl:grid-cols-4">
+                <div className="rounded-2xl bg-slate-100 p-4">
+                  <div className="text-xs uppercase text-slate-500">Postup úkolů</div>
+                  <div className="mt-2 text-3xl font-bold">{progress(selectedProject)}%</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {(selectedProject.items || []).flatMap((item) => item.tasks || []).filter((task) => task.done).length} hotovo /
+                    {(selectedProject.items || []).flatMap((item) => item.tasks || []).length} úkolů
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-slate-100 p-4">
+                  <div className="text-xs uppercase text-slate-500">Finance</div>
+                  <div className="mt-2 text-xl font-bold">{money(Number(selectedProject.contractAmount || 0))}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Fakturováno: {money(Number(selectedProject.invoicedAmount || 0))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-slate-100 p-4">
+                  <div className="text-xs uppercase text-slate-500">Materiál</div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {[...new Set((selectedProject.items || []).flatMap((item) => (item.materials || []).map((material) => material.status)))].slice(0,4).map((status) => (
+                      <span key={status} className={`rounded-xl px-2 py-1 text-xs font-medium ${materialStatusClass(status)}`}>
+                        {status}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-slate-100 p-4">
+                  <div className="text-xs uppercase text-slate-500">Termín</div>
+                  <div className="mt-2 text-xl font-bold">
+                    {Math.max(0, Math.ceil((new Date(`${selectedProject.endDate}T12:00:00`) - new Date()) / 86400000))}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">dní do konce zakázky</div>
+                </div>
+              </div>
+
               <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-xl font-bold">
