@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, CheckCircle2, Circle, Hammer, Package, Plus, Users, BriefcaseBusiness, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { supabase, PLANNER_STATE_ID } from "@/lib/supabase";
 
 const weeks = Array.from({ length: 53 }, (_, i) => i + 1);
 const initialEmployees = ["Luboš", "Honza", "Petr", "Karel"];
@@ -157,7 +158,9 @@ export default function App() {
   const [newTaskText, setNewTaskText] = useState("");
   const [newMaterialText, setNewMaterialText] = useState("");
   const [viewYear, setViewYear] = useState(savedData?.viewYear || 2026);
-  const [saveStatus, setSaveStatus] = useState("Načteno");
+  const [saveStatus, setSaveStatus] = useState("Načteno lokálně");
+  const [remoteLoaded, setRemoteLoaded] = useState(false);
+  const [syncError, setSyncError] = useState("");
   const [userRole, setUserRole] = useState("viewer");
   const [attendanceRecords, setAttendanceRecords] = useState(savedData?.attendanceRecords || []);
   const [attendanceEmployee, setAttendanceEmployee] = useState(savedData?.attendanceEmployee || initialEmployees[0]);
@@ -182,10 +185,115 @@ export default function App() {
   const selectedItem = selectedProject?.items.find((item) => item.id === selectedItemId) || selectedProject?.items[0];
   const hasOpenAttendance = attendanceRecords.some((record) => record.employee === attendanceEmployee && !record.departure);
 
+  function buildPlannerData(next = {}) {
+    return {
+      employees: next.employees ?? employees,
+      employeeAbsences: next.employeeAbsences ?? employeeAbsences,
+      projects: next.projects ?? projects,
+      selectedProjectId: next.selectedProjectId ?? selectedProjectId,
+      selectedItemId: next.selectedItemId ?? selectedItemId,
+      viewYear: next.viewYear ?? viewYear,
+      attendanceRecords: next.attendanceRecords ?? attendanceRecords,
+      attendanceEmployee: next.attendanceEmployee ?? attendanceEmployee,
+      attendanceProjectId: next.attendanceProjectId ?? attendanceProjectId,
+      attendanceMonth: next.attendanceMonth ?? attendanceMonth,
+      siteDiaryEntries: next.siteDiaryEntries ?? siteDiaryEntries,
+    };
+  }
+
+  function applyPlannerData(data) {
+    if (!data || typeof data !== "object") return;
+    if (Array.isArray(data.employees)) setEmployees(data.employees);
+    if (data.employeeAbsences && typeof data.employeeAbsences === "object") setEmployeeAbsences(data.employeeAbsences);
+    if (Array.isArray(data.projects)) {
+      setProjects(data.projects.map((project, index) => ({ ...project, color: project.color || projectColors[index % projectColors.length] })));
+    }
+    if (data.selectedProjectId) setSelectedProjectId(data.selectedProjectId);
+    if (data.selectedItemId) setSelectedItemId(data.selectedItemId);
+    if (data.viewYear) setViewYear(data.viewYear);
+    if (Array.isArray(data.attendanceRecords)) setAttendanceRecords(data.attendanceRecords);
+    if (data.attendanceEmployee) setAttendanceEmployee(data.attendanceEmployee);
+    if (data.attendanceProjectId) setAttendanceProjectId(data.attendanceProjectId);
+    if (data.attendanceMonth) setAttendanceMonth(data.attendanceMonth);
+    if (Array.isArray(data.siteDiaryEntries)) setSiteDiaryEntries(data.siteDiaryEntries);
+  }
+
+  async function saveRemote(data) {
+    if (!supabase || !remoteLoaded) return;
+    setSaveStatus("Ukládám do cloudu…");
+    setSyncError("");
+
+    const { error } = await supabase
+      .from("planner_state")
+      .update({ data, updated_at: new Date().toISOString() })
+      .eq("id", PLANNER_STATE_ID);
+
+    if (error) {
+      console.error(error);
+      setSyncError(error.message);
+      setSaveStatus("Chyba uložení");
+    } else {
+      setSaveStatus("Uloženo v cloudu");
+    }
+  }
+
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth, siteDiaryEntries }));
-    setSaveStatus("Uloženo");
-  }, [employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth, siteDiaryEntries]);
+    async function loadRemoteData() {
+      if (!supabase) {
+        setSaveStatus("Supabase není nastavený");
+        setRemoteLoaded(true);
+        return;
+      }
+
+      setSaveStatus("Načítám cloud…");
+      setSyncError("");
+
+      const { data, error } = await supabase
+        .from("planner_state")
+        .select("data")
+        .eq("id", PLANNER_STATE_ID)
+        .single();
+
+      if (error) {
+        console.error(error);
+        setSyncError(error.message);
+        setSaveStatus("Chyba načtení");
+        setRemoteLoaded(true);
+        return;
+      }
+
+      if (data?.data && Object.keys(data.data).length > 0) {
+        applyPlannerData(data.data);
+        setSaveStatus("Načteno z cloudu");
+      } else {
+        const initialData = buildPlannerData();
+        await supabase
+          .from("planner_state")
+          .update({ data: initialData, updated_at: new Date().toISOString() })
+          .eq("id", PLANNER_STATE_ID);
+        setSaveStatus("Inicializováno v cloudu");
+      }
+
+      setRemoteLoaded(true);
+    }
+
+    loadRemoteData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const data = buildPlannerData();
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+    if (!remoteLoaded) return;
+
+    const timeout = window.setTimeout(() => {
+      saveRemote(data);
+    }, 700);
+
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth, siteDiaryEntries, remoteLoaded]);
 
   const workload = useMemo(() => {
     const map = {};
@@ -753,7 +861,7 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
             <div className="rounded-2xl bg-slate-100 px-4 py-2"><b>{projects.length}</b> zakázek</div>
             <div className="rounded-2xl bg-slate-100 px-4 py-2"><b>{employees.length}</b> lidí</div>
-            <div className="rounded-2xl bg-green-100 px-4 py-2 text-green-800">{saveStatus}</div>
+            <div className={`rounded-2xl px-4 py-2 ${syncError ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}`}>{saveStatus}</div>
             <div className={`rounded-2xl px-4 py-2 ${userRole === "admin" ? "bg-blue-100 text-blue-800" : userRole === "site" ? "bg-orange-100 text-orange-800" : "bg-slate-100 text-slate-500"}`}>
               {userRole === "admin" ? "Admin" : userRole === "site" ? "Stavba" : "Pouze náhled"}
             </div>
