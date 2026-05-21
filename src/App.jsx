@@ -1214,41 +1214,70 @@ export default function App() {
         {selectedProject && (
           <Card className="rounded-3xl shadow-sm">
             <CardContent className="p-4">
-              <div className="mb-4 grid gap-3 xl:grid-cols-4">
-                <div className="rounded-2xl bg-slate-100 p-4">
-                  <div className="text-xs uppercase text-slate-500">Postup úkolů</div>
-                  <div className="mt-2 text-3xl font-bold">{progress(selectedProject)}%</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    {(selectedProject.items || []).flatMap((item) => item.tasks || []).filter((task) => task.done).length} hotovo /
-                    {(selectedProject.items || []).flatMap((item) => item.tasks || []).length} úkolů
+              <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <div className="rounded-3xl border bg-white p-4 shadow-sm">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Postup zakázky</div>
+                  <div className="mt-2 flex items-end justify-between">
+                    <div className="text-4xl font-bold">{progress(selectedProject)}%</div>
+                    <div className="rounded-2xl bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+                      {(selectedProject.items || []).flatMap((item) => item.tasks || []).filter((task) => task.done).length} hotovo
+                    </div>
+                  </div>
+                  <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-green-500 transition-all"
+                      style={{ width: `${progress(selectedProject)}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    Celkem úkolů: {(selectedProject.items || []).flatMap((item) => item.tasks || []).length}
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-slate-100 p-4">
-                  <div className="text-xs uppercase text-slate-500">Finance</div>
-                  <div className="mt-2 text-xl font-bold">{money(Number(selectedProject.contractAmount || 0))}</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    Fakturováno: {money(Number(selectedProject.invoicedAmount || 0))}
+                <div className="rounded-3xl border bg-white p-4 shadow-sm">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Finance zakázky</div>
+                  <div className="mt-2 text-2xl font-bold">{money(Number(selectedProject.contractAmount || 0))}</div>
+                  <div className="mt-3 space-y-1 text-xs text-slate-600">
+                    <div className="flex justify-between"><span>Materiál</span><span>{money(Number(selectedProject.materialAmount || 0))}</span></div>
+                    <div className="flex justify-between"><span>Práce</span><span>{money(Number(selectedProject.workAmount || 0))}</span></div>
+                    <div className="flex justify-between font-semibold"><span>Fakturace</span><span>{money(Number(selectedProject.invoicedAmount || 0))}</span></div>
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-slate-100 p-4">
-                  <div className="text-xs uppercase text-slate-500">Materiál</div>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {[...new Set((selectedProject.items || []).flatMap((item) => (item.materials || []).map((material) => material.status)))].slice(0,4).map((status) => (
-                      <span key={status} className={`rounded-xl px-2 py-1 text-xs font-medium ${materialStatusClass(status)}`}>
+                <div className="rounded-3xl border bg-white p-4 shadow-sm">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Materiál</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {[...new Set((selectedProject.items || []).flatMap((item) => (item.materials || []).map((material) => material.status)))].slice(0,6).map((status) => (
+                      <span key={status} className={`rounded-2xl px-3 py-1 text-xs font-medium ${materialStatusClass(status)}`}>
                         {status}
                       </span>
                     ))}
                   </div>
+                  <div className="mt-3 text-xs text-slate-500">
+                    {(selectedProject.items || []).flatMap((item) => item.materials || []).length} materiálových položek
+                  </div>
                 </div>
 
-                <div className="rounded-2xl bg-slate-100 p-4">
-                  <div className="text-xs uppercase text-slate-500">Termín</div>
-                  <div className="mt-2 text-xl font-bold">
+                <div className="rounded-3xl border bg-white p-4 shadow-sm">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Termín dokončení</div>
+                  <div className="mt-2 text-4xl font-bold">
                     {Math.max(0, Math.ceil((new Date(`${selectedProject.endDate}T12:00:00`) - new Date()) / 86400000))}
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">dní do konce zakázky</div>
+                  <div className="mt-1 text-sm text-slate-600">dní do konce</div>
+                  {Math.ceil((new Date(`${selectedProject.endDate}T12:00:00`) - new Date()) / 86400000) <= 14 && (
+                    <div className="mt-3 rounded-2xl bg-red-100 px-3 py-2 text-xs font-semibold text-red-700">
+                      Pozor – blíží se konec termínu
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-3xl border bg-white p-4 shadow-sm">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Položky zakázky</div>
+                  <div className="mt-2 text-4xl font-bold">{selectedProject.items?.length || 0}</div>
+                  <div className="mt-3 space-y-1 text-xs text-slate-600">
+                    <div>Rozpracované: {(selectedProject.items || []).filter((item) => (item.tasks || []).some((task) => !task.done)).length}</div>
+                    <div>Hotové: {(selectedProject.items || []).filter((item) => (item.tasks || []).length > 0 && (item.tasks || []).every((task) => task.done)).length}</div>
+                  </div>
                 </div>
               </div>
 
