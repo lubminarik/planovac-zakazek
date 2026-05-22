@@ -178,6 +178,11 @@ export default function App() {
   const [attendanceMonth, setAttendanceMonth] = useState(savedData?.attendanceMonth || todayString().slice(0, 7));
   const [newManualAttendance, setNewManualAttendance] = useState({ employee: initialEmployees[0], projectId: initialProjects[0].id, date: todayString(), arrival: "07:00", departure: "15:30", lunchMinutes: 30 });
   const [siteDiaryEntries, setSiteDiaryEntries] = useState(savedData?.siteDiaryEntries || []);
+  const [projectDocuments, setProjectDocuments] = useState(savedData?.projectDocuments || []);
+  const [documentTitle, setDocumentTitle] = useState("");
+  const [documentRevision, setDocumentRevision] = useState("");
+  const [documentNote, setDocumentNote] = useState("");
+  const [documentUploading, setDocumentUploading] = useState(false);
   const [diaryNote, setDiaryNote] = useState("");
   const [diaryPhoto, setDiaryPhoto] = useState("");
   const [diarySignature, setDiarySignature] = useState("");
@@ -211,6 +216,7 @@ export default function App() {
       attendanceProjectId: next.attendanceProjectId ?? attendanceProjectId,
       attendanceMonth: next.attendanceMonth ?? attendanceMonth,
       siteDiaryEntries: next.siteDiaryEntries ?? siteDiaryEntries,
+      projectDocuments: next.projectDocuments ?? projectDocuments,
     };
   }
 
@@ -229,6 +235,7 @@ export default function App() {
     if (data.attendanceProjectId) setAttendanceProjectId(data.attendanceProjectId);
     if (data.attendanceMonth) setAttendanceMonth(data.attendanceMonth);
     if (Array.isArray(data.siteDiaryEntries)) setSiteDiaryEntries(data.siteDiaryEntries);
+    if (Array.isArray(data.projectDocuments)) setProjectDocuments(data.projectDocuments);
   }
 
   async function saveRemote(data) {
@@ -323,7 +330,7 @@ export default function App() {
 
     return () => window.clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth, siteDiaryEntries, remoteLoaded]);
+  }, [employees, employeeAbsences, projects, selectedProjectId, selectedItemId, viewYear, attendanceRecords, attendanceEmployee, attendanceProjectId, attendanceMonth, siteDiaryEntries, projectDocuments, remoteLoaded]);
 
   const workload = useMemo(() => {
     const map = {};
@@ -915,6 +922,68 @@ export default function App() {
     setIsSigning(false);
   }
 
+  async function uploadProjectDocument(file) {
+    if (!canEditSite || !selectedProject || !file) return;
+    if (!supabase) {
+      alert("Supabase není nastavený.");
+      return;
+    }
+
+    setDocumentUploading(true);
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${selectedProject.id}/${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage
+        .from("project-documents")
+        .upload(path, file, { upsert: false });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicData } = supabase.storage
+        .from("project-documents")
+        .getPublicUrl(path);
+
+      setProjectDocuments((prev) => [
+        {
+          id: nextId("DOC"),
+          projectId: selectedProject.id,
+          projectName: selectedProject.name,
+          title: documentTitle.trim() || file.name,
+          revision: documentRevision.trim(),
+          note: documentNote.trim(),
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          path,
+          url: publicData.publicUrl,
+          uploadedAt: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+
+      setDocumentTitle("");
+      setDocumentRevision("");
+      setDocumentNote("");
+    } catch (error) {
+      console.error(error);
+      alert(`Nahrání dokumentu se nepovedlo: ${error.message || error}`);
+    } finally {
+      setDocumentUploading(false);
+    }
+  }
+
+  function removeProjectDocument(documentId) {
+    if (!canEditAll) return;
+    if (!window.confirm("Opravdu smazat tento dokument ze seznamu?")) return;
+    setProjectDocuments((prev) => prev.filter((document) => document.id !== documentId));
+  }
+
+  function formatFileSize(bytes) {
+    if (!bytes) return "";
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} kB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
   function exportData() {
     const data = {
       version: 1,
@@ -930,6 +999,7 @@ export default function App() {
       attendanceProjectId,
       attendanceMonth,
       siteDiaryEntries,
+      projectDocuments,
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -1348,6 +1418,67 @@ export default function App() {
           </Card>
         )}
 
+        {selectedProject && canEditSite && (
+          <Card className="rounded-3xl shadow-sm">
+            <CardContent className="p-4">
+              <div className="mb-3 flex flex-col gap-1">
+                <div className="font-semibold">Výkresová dokumentace – {selectedProject.name}</div>
+                <div className="text-xs text-slate-500">PDF, DWG, JPG, PNG a další dokumenty k zakázce</div>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-[1fr_160px_1fr_220px]">
+                <input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Název dokumentu" className="rounded-xl border px-3 py-2 text-sm" />
+                <input value={documentRevision} onChange={(e) => setDocumentRevision(e.target.value)} placeholder="Revize" className="rounded-xl border px-3 py-2 text-sm" />
+                <input value={documentNote} onChange={(e) => setDocumentNote(e.target.value)} placeholder="Poznámka" className="rounded-xl border px-3 py-2 text-sm" />
+                <input
+                  type="file"
+                  accept=".pdf,.dwg,.dxf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.doc,.docx"
+                  disabled={documentUploading}
+                  onChange={(e) => uploadProjectDocument(e.target.files?.[0])}
+                  className="rounded-xl border bg-white px-3 py-2 text-sm"
+                />
+              </div>
+
+              {documentUploading && <div className="mt-3 text-sm text-slate-500">Nahrávám dokument…</div>}
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {projectDocuments.filter((document) => document.projectId === selectedProject.id).length === 0 && (
+                  <div className="rounded-2xl border bg-slate-50 p-4 text-sm text-slate-500">Zatím není nahraná žádná dokumentace.</div>
+                )}
+                {projectDocuments.filter((document) => document.projectId === selectedProject.id).map((document) => (
+                  <div key={document.id} className="rounded-2xl border bg-white p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="font-semibold">{document.title}</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {document.revision ? `Revize: ${document.revision} • ` : ""}{document.fileName} • {formatFileSize(document.fileSize)} • {formatDateTime(document.uploadedAt)}
+                        </div>
+                        {document.note && <div className="mt-2 text-sm text-slate-700">{document.note}</div>}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <a href={document.url} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700">
+                          Otevřít
+                        </a>
+                        {canEditAll && (
+                          <button onClick={() => removeProjectDocument(document.id)} className="rounded-xl bg-red-100 px-3 py-2 text-sm text-red-700 hover:bg-red-200">
+                            Smazat
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {document.fileType?.startsWith("image/") && (
+                      <img src={document.url} alt={document.title} className="mt-3 max-h-72 rounded-xl border object-contain" />
+                    )}
+                    {document.fileType === "application/pdf" && (
+                      <iframe src={document.url} title={document.title} className="mt-3 h-80 w-full rounded-xl border" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="rounded-3xl shadow-sm">
           <CardContent className="p-4">
