@@ -994,10 +994,8 @@ export default function App() {
   }
 
   function findLineValue(text, labels) {
-    const normalizedText = String(text || "");
-    const lines = normalizedText.replace(/
-/g, "").split("
-").map((line) => line.trim()).filter(Boolean);
+    const normalizedText = String(text || "").replaceAll(String.fromCharCode(13), "");
+    const lines = normalizedText.split(String.fromCharCode(10)).map((line) => line.trim()).filter(Boolean);
     const found = lines.find((line) => labels.some((label) => line.toLowerCase().includes(label)));
     if (!found) return "";
     const parts = found.split(":");
@@ -1085,8 +1083,8 @@ export default function App() {
       color: getAutoProjectColor(projects),
       startDate: contractDraft.startDate || todayString(),
       endDate: contractDraft.endDate || todayString(),
-      note: `${contractDraft.note || ""}${contractDraft.investor ? `
-Investor: ${contractDraft.investor}` : ""}`.trim(),
+      note: [contractDraft.note || "", contractDraft.investor ? `Investor: ${contractDraft.investor}` : ""].filter(Boolean).join("
+"),
       contractAmount: contractDraft.contractAmount || "",
       materialAmount: "",
       workAmount: "",
