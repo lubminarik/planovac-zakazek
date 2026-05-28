@@ -995,9 +995,9 @@ export default function App() {
 
   function findLineValue(text, labels) {
     const normalizedText = String(text || "");
-    const lines = normalizedText.split(/
-?
-/).map((line) => line.trim()).filter(Boolean);
+    const lines = normalizedText.replace(/
+/g, "").split("
+").map((line) => line.trim()).filter(Boolean);
     const found = lines.find((line) => labels.some((label) => line.toLowerCase().includes(label)));
     if (!found) return "";
     const parts = found.split(":");
