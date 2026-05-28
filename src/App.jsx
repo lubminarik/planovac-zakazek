@@ -1083,8 +1083,7 @@ export default function App() {
       color: getAutoProjectColor(projects),
       startDate: contractDraft.startDate || todayString(),
       endDate: contractDraft.endDate || todayString(),
-      note: [contractDraft.note || "", contractDraft.investor ? `Investor: ${contractDraft.investor}` : ""].filter(Boolean).join("
-"),
+      note: [contractDraft.note || "", contractDraft.investor ? `Investor: ${contractDraft.investor}` : ""].filter(Boolean).join("\n"),
       contractAmount: contractDraft.contractAmount || "",
       materialAmount: "",
       workAmount: "",
