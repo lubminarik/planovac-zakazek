@@ -183,6 +183,11 @@ export default function App() {
   const [documentRevision, setDocumentRevision] = useState("");
   const [documentNote, setDocumentNote] = useState("");
   const [documentUploading, setDocumentUploading] = useState(false);
+  const [contractImportOpen, setContractImportOpen] = useState(false);
+  const [contractText, setContractText] = useState("");
+  const [contractFile, setContractFile] = useState(null);
+  const [contractDraft, setContractDraft] = useState({ name: "", investor: "", startDate: todayString(), endDate: todayString(), contractAmount: "", note: "" });
+  const [contractImportStatus, setContractImportStatus] = useState("");
   const [diaryNote, setDiaryNote] = useState("");
   const [diaryPhoto, setDiaryPhoto] = useState("");
   const [diarySignature, setDiarySignature] = useState("");
@@ -984,6 +989,119 @@ export default function App() {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
+  function cleanMoney(value) {
+    return String(value || "").replace(/[^0-9]/g, "");
+  }
+
+  function findLineValue(text, labels) {
+    const lines = String(text || "").split("
+").map((line) => line.trim()).filter(Boolean);
+    const found = lines.find((line) => labels.some((label) => line.toLowerCase().includes(label)));
+    if (!found) return "";
+    const parts = found.split(":");
+    return (parts.length > 1 ? parts.slice(1).join(":") : found).trim();
+  }
+
+  function findFirstCzechDate(text) {
+    const match = String(text || "").match(/[0-9]{1,2}[.][ ]*[0-9]{1,2}[.][ ]*[0-9]{4}/);
+    if (!match) return "";
+    const parts = match[0].replaceAll(" ", "").split(".").filter(Boolean);
+    if (parts.length < 3) return "";
+    return `${parts[2]}-${String(parts[1]).padStart(2, "0")}-${String(parts[0]).padStart(2, "0")}`;
+  }
+
+  function findAmount(text) {
+    const match = String(text || "").match(/[0-9][0-9 .]{3,}[ ]*(Kč|CZK|kč|czk)/);
+    return match ? cleanMoney(match[0]) : "";
+  }
+
+  function parseContractText() {
+    if (!contractText.trim()) {
+      alert("Nejdřív vlož text smlouvy do pole.");
+      return;
+    }
+
+    const name = findLineValue(contractText, ["název", "předmět", "akce", "dílo"]);
+    const investor = findLineValue(contractText, ["objednatel", "investor"]);
+    const amount = findAmount(contractText);
+    const firstDate = findFirstCzechDate(contractText);
+
+    setContractDraft((prev) => ({
+      ...prev,
+      name: name || prev.name,
+      investor: investor || prev.investor,
+      startDate: firstDate || prev.startDate,
+      endDate: firstDate || prev.endDate,
+      contractAmount: amount || prev.contractAmount,
+      note: prev.note || "Zakázka založená importem ze smlouvy o dílo.",
+    }));
+    setContractImportStatus("Text smlouvy byl načten. Zkontroluj předvyplněná pole a potvrď založení zakázky.");
+  }
+
+  async function createProjectFromContract() {
+    if (!canEditAll) return;
+    if (!contractDraft.name.trim()) {
+      alert("Doplň název zakázky.");
+      return;
+    }
+
+    let contractDocument = null;
+    const id = nextId("ZK");
+    const itemId = nextId("P");
+
+    if (contractFile && supabase) {
+      try {
+        const safeName = contractFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${id}/${Date.now()}-SOD-${safeName}`;
+        const { error: uploadError } = await supabase.storage.from("project-documents").upload(path, contractFile, { upsert: false });
+        if (uploadError) throw uploadError;
+        const { data: publicData } = supabase.storage.from("project-documents").getPublicUrl(path);
+        contractDocument = {
+          id: nextId("DOC"),
+          projectId: id,
+          projectName: contractDraft.name.trim(),
+          title: `Smlouva o dílo – ${contractDraft.name.trim()}`,
+          revision: "SoD",
+          note: "Smlouva použitá pro založení zakázky.",
+          fileName: contractFile.name,
+          fileType: contractFile.type,
+          fileSize: contractFile.size,
+          path,
+          url: publicData.publicUrl,
+          uploadedAt: new Date().toISOString(),
+        };
+      } catch (error) {
+        alert(`Smlouvu se nepodařilo nahrát: ${error.message || error}`);
+        return;
+      }
+    }
+
+    const project = {
+      id,
+      name: contractDraft.name.trim(),
+      investor: contractDraft.investor.trim(),
+      color: getAutoProjectColor(projects),
+      startDate: contractDraft.startDate || todayString(),
+      endDate: contractDraft.endDate || todayString(),
+      note: `${contractDraft.note || ""}${contractDraft.investor ? `
+Investor: ${contractDraft.investor}` : ""}`.trim(),
+      contractAmount: contractDraft.contractAmount || "",
+      materialAmount: "",
+      workAmount: "",
+      invoicedAmount: "",
+      items: [{ id: itemId, name: "Položka ze smlouvy", info: "Doplnit rozsah dle SoD", startDate: contractDraft.startDate || todayString(), endDate: contractDraft.endDate || todayString(), employee: employees[0] || "", tasks: [], materials: [] }],
+    };
+
+    setProjects((prev) => [...prev, project]);
+    if (contractDocument) setProjectDocuments((prev) => [contractDocument, ...prev]);
+    setSelectedProjectId(id);
+    setSelectedItemId(itemId);
+    setContractDraft({ name: "", investor: "", startDate: todayString(), endDate: todayString(), contractAmount: "", note: "" });
+    setContractText("");
+    setContractFile(null);
+    setContractImportStatus("Zakázka byla založená ze smlouvy.");
+  }
+
   function exportData() {
     const data = {
       version: 1,
@@ -1088,7 +1206,76 @@ export default function App() {
           </div>
         </div>
 
-    <Card className="rounded-3xl shadow-sm">
+    {canEditAll && (
+          <Card className="rounded-3xl shadow-sm">
+            <CardContent className="p-4">
+              <button
+                type="button"
+                onClick={() => setContractImportOpen((open) => !open)}
+                className="flex w-full items-center justify-between rounded-2xl bg-slate-100 px-4 py-3 text-left font-semibold transition hover:bg-slate-200"
+              >
+                <span>Import zakázky ze smlouvy o dílo</span>
+                <span className="text-sm text-slate-500">{contractImportOpen ? "skrýt" : "rozbalit"}</span>
+              </button>
+
+              {contractImportOpen && (
+                <div className="mt-4 space-y-4">
+                  <div className="rounded-2xl border bg-slate-50 p-4 text-sm text-slate-600">
+                    Nahraj smlouvu jako dokument a vlož text smlouvy do pole níže. Aplikace předvyplní název, investora, cenu a datum. Před založením zakázky vše zkontroluj.
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+                    <div className="space-y-3">
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
+                        onChange={(e) => setContractFile(e.target.files?.[0] || null)}
+                        className="w-full rounded-xl border bg-white px-3 py-2 text-sm"
+                      />
+                      <textarea
+                        value={contractText}
+                        onChange={(e) => setContractText(e.target.value)}
+                        placeholder="Sem vlož text smlouvy o dílo…"
+                        className="h-48 w-full rounded-2xl border px-3 py-2 text-sm"
+                      />
+                      <Button onClick={parseContractText}>Načíst údaje ze smlouvy</Button>
+                    </div>
+
+                    <div className="grid gap-3 rounded-2xl border bg-white p-4">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-500">Název zakázky</label>
+                        <input value={contractDraft.name} onChange={(e) => setContractDraft((prev) => ({ ...prev, name: e.target.value }))} className="w-full rounded-xl border px-3 py-2 text-sm" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-500">Investor / objednatel</label>
+                        <input value={contractDraft.investor} onChange={(e) => setContractDraft((prev) => ({ ...prev, investor: e.target.value }))} className="w-full rounded-xl border px-3 py-2 text-sm" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-slate-500">Termín od</label>
+                          <input type="date" value={contractDraft.startDate} onChange={(e) => setContractDraft((prev) => ({ ...prev, startDate: e.target.value }))} className="w-full rounded-xl border px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-slate-500">Termín do</label>
+                          <input type="date" value={contractDraft.endDate} onChange={(e) => setContractDraft((prev) => ({ ...prev, endDate: e.target.value }))} className="w-full rounded-xl border px-3 py-2 text-sm" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-500">Částka dle SoD</label>
+                        <input value={contractDraft.contractAmount} onChange={(e) => setContractDraft((prev) => ({ ...prev, contractAmount: e.target.value }))} className="w-full rounded-xl border px-3 py-2 text-sm" />
+                      </div>
+                      <textarea value={contractDraft.note} onChange={(e) => setContractDraft((prev) => ({ ...prev, note: e.target.value }))} placeholder="Poznámka" className="h-20 rounded-xl border px-3 py-2 text-sm" />
+                      <Button onClick={createProjectFromContract}>Založit zakázku ze smlouvy</Button>
+                      {contractImportStatus && <div className="text-sm text-green-700">{contractImportStatus}</div>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="rounded-3xl shadow-sm">
           <CardContent className="p-4">
             <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
